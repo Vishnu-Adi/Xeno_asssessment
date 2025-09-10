@@ -1,10 +1,10 @@
-// app/api/oauth/callback/route.ts
+// src/app/api/oauth/callback/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnv } from '@/lib/env'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 
-export const runtime = 'node' // ensure Node runtime, not edge
+export const runtime = 'nodejs' // ✅ Next 15 expects 'nodejs' or 'edge'
 
 export async function GET(req: NextRequest) {
   const env = getEnv()
@@ -42,24 +42,22 @@ export async function GET(req: NextRequest) {
     const tokenJson = (await tokenRes.json()) as { access_token: string }
     const accessToken = tokenJson.access_token
 
-    // 2) Resolve or create tenant id (must be 16-byte Buffer for BINARY(16))
-    const tenantId = await resolveTenantIdFromShopDomain(shop) // expect Buffer(16)
+    // 2) Resolve/create tenant id (Buffer(16))
+    const tenantId = await resolveTenantIdFromShopDomain(shop)
 
-    // 3) Ensure Tenant exists (primary key is `id`)
+    // 3) Ensure Tenant exists (PK is `id`)
     await prisma.tenant.upsert({
       where: { id: tenantId },
-      update: {}, // no updatedAt if not in schema
+      update: {},
       create: { id: tenantId, name: shop }
     })
 
     // 4) Upsert Store for this shop and tenant
-    // If you defined @@unique([shopDomain]) on Store, you can use store.upsert with where: { shopDomain: shop }.
-    // To be safe regardless of schema, do findFirst → create/update:
     const existing = await prisma.store.findFirst({ where: { shopDomain: shop } })
     if (existing) {
       await prisma.store.update({
         where: { id: existing.id },
-        data: { accessToken, tenantId } // keep tenantId in sync
+        data: { accessToken, tenantId }
       })
     } else {
       await prisma.store.create({
@@ -91,21 +89,17 @@ export async function GET(req: NextRequest) {
           if (!resp.ok) {
             console.error('Failed to register webhook', topic, await resp.text())
           }
-        } catch (err) {
+        } catch (err: unknown) {
           console.error('Webhook registration error', topic, err)
         }
       })
     )
 
-    // Success — you can redirect to your app UI if you prefer:
-    // return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
-// app/api/oauth/callback/route.ts (or src/app/api/... based on your tree)
-
-  // Success — redirect to dashboard so install flow feels right
-return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
-
-  } catch (err: any) {
-    console.error('OAuth callback exception:', err)
-    return NextResponse.json({ error: 'OAuth callback exception', detail: String(err?.message ?? err) }, { status: 500 })
+    // Redirect to your dashboard after install
+    return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('OAuth callback exception:', msg)
+    return NextResponse.json({ error: 'OAuth callback exception', detail: msg }, { status: 500 })
   }
 }
