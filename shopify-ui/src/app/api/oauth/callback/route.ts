@@ -67,9 +67,12 @@ export async function GET(req: NextRequest) {
 
     // 5) Register minimal webhooks (best-effort; log failures)
     const topics = [
-      'orders/create', 'orders/updated',
-      'customers/create', 'customers/updated',
-      'products/create', 'products/updated'
+      'products/create',
+      'products/update',
+      'checkouts/create',
+      'checkouts/update',
+      'app/uninstalled',
+      // 'orders/create', 'orders/updated' // ← leave commented until PCDA is approved
     ]
     const baseWebhookUrl = `${env.SHOPIFY_APP_URL}/api/webhooks`
 
