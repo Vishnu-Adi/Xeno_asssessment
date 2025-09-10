@@ -12,6 +12,7 @@ type Summary = {
   activeCheckouts24h: number
   checkoutValue24h: number
   completionRate7d: number
+  source: 'checkout' | 'cart' | 'none'
 }
 
 function DashboardContent() {
@@ -51,9 +52,14 @@ function DashboardContent() {
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Kpi label="Products" value={summary.data?.productCount ?? 0} />
         <Kpi label="New (7d)" value={summary.data?.newProducts7d ?? 0} />
-        <Kpi label="Active checkouts (24h)" value={summary.data?.activeCheckouts24h ?? 0} />
-        <Kpi label="Checkout value (24h)" value={`₹${(summary.data?.checkoutValue24h ?? 0).toFixed(2)}`} />
-        <Kpi label="Completion rate (7d)" value={`${Math.round((summary.data?.completionRate7d ?? 0)*100)}%`} />
+        <Kpi label="Active (24h)" value={summary.data?.activeCheckouts24h ?? 0} />
+        <Kpi label="Value (24h)" value={`₹${(summary.data?.checkoutValue24h ?? 0).toFixed(2)}`} />
+        <Kpi label="Progress (7d)" value={`${Math.round((summary.data?.completionRate7d ?? 0) * 100)}%`} />
+      </div>
+
+      {/* Data source indicator */}
+      <div className="text-xs text-gray-500">
+        Source: {summary.data?.source === 'checkout' ? 'Checkout' : summary.data?.source === 'cart' ? 'Cart' : 'No data'}
       </div>
 
       {/* Chart */}

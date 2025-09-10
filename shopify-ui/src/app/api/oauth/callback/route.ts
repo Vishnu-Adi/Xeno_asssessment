@@ -74,6 +74,8 @@ export async function GET(req: NextRequest) {
       'app/uninstalled',
       // keep orders/* commented until PCDA is approved
     ]
+
+ 
     
     const baseWebhookUrl = `${env.SHOPIFY_APP_URL}/api/webhooks`
 
