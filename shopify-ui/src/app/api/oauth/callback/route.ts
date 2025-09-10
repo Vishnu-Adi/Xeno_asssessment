@@ -69,11 +69,12 @@ export async function GET(req: NextRequest) {
     const topics = [
       'products/create',
       'products/update',
-      'checkouts/create',
-      'checkouts/update',
+      'carts/create',
+      'carts/update',
       'app/uninstalled',
-      // 'orders/create', 'orders/updated' // ← leave commented until PCDA is approved
+      // keep orders/* commented until PCDA is approved
     ]
+    
     const baseWebhookUrl = `${env.SHOPIFY_APP_URL}/api/webhooks`
 
     await Promise.all(

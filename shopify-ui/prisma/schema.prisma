@@ -6,6 +6,17 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
+model Cart {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   Bytes    @db.Binary(16)
+  cartToken  String   @unique
+  currency   String   @db.VarChar(10)
+  totalPrice Decimal  @db.Decimal(12,2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, cartToken], name: "tenantId_cartToken")
+}
 
 model Tenant {
   id            Bytes          @id @db.Binary(16)

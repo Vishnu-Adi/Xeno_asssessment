@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
-export const runtime = 'nodejs'
 
-// ✅ helper: convert any BigInt to string for JSON
-function jsonBigInt<T>(data: T): T {
-  return JSON.parse(
-    JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
-  )
-}
+export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
   const prisma = getPrisma()
@@ -21,9 +15,18 @@ export async function GET(req: NextRequest) {
   const products = await prisma.product.findMany({
     where: { tenantId },
     orderBy: { updatedAt: 'desc' },
-    take: 10,
+    take: 10
   })
 
-  // ✅ return JSON-safe objects
-  return NextResponse.json({ items: jsonBigInt(products) })
+  // ✅ Convert BigInt/Buffer to JSON-safe primitives
+  const items = products.map(p => ({
+    id: Number(p.id),
+    tenantId: '0x' + Buffer.from(p.tenantId).toString('hex'),
+    shopifyProductId: Number(p.shopifyProductId),
+    title: p.title,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt
+  }))
+
+  return NextResponse.json({ items })
 }
