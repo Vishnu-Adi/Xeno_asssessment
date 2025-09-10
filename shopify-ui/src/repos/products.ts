@@ -22,7 +22,7 @@ export async function listProducts(scope: TenantScope, params: { limit?: number;
 
 export async function upsertFromShopify(
   scope: TenantScope,
-  payload: any,
+  payload: { id: string; title?: string; created_at?: string },
   client?: PrismaClient | Prisma.TransactionClient
 ): Promise<Product> {
   const prisma = (client ?? getPrisma());

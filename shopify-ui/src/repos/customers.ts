@@ -11,19 +11,19 @@ export async function listCustomers(scope: TenantScope, params: { from?: Date; t
       ? { createdAt: { gte: params.from, lte: params.to } }
       : {}),
   } as const;
-  const cursor = params.cursor ? { tenantId_customerId: { tenantId: scope.tenantId, customerId: Buffer.from(params.cursor, 'hex') } } : undefined;
-  const items = await prisma.customer.findMany({ where, orderBy: [{ createdAt: 'desc' }], take: take + 1, ...(cursor ? { cursor, skip: 1 } : {}) });
+  const cursor = params.cursor ? { id: BigInt(params.cursor) } : undefined;
+  const items = await prisma.customer.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: take + 1, ...(cursor ? { cursor, skip: 1 } : {}) });
   let nextCursor: string | null = null;
   if (items.length > take) {
     const next = items.pop()!;
-    nextCursor = Buffer.from(next.customerId).toString('hex');
+    nextCursor = String(next.id);
   }
   return { items, nextCursor };
 }
 
 export async function upsertFromShopify(
   scope: TenantScope,
-  payload: any,
+  payload: { id: string; email?: string; first_name?: string; last_name?: string; created_at?: string },
   client?: PrismaClient | Prisma.TransactionClient
 ): Promise<Customer> {
   const prisma = (client ?? getPrisma());
@@ -36,20 +36,13 @@ export async function upsertFromShopify(
     },
     create: {
       tenantId: scope.tenantId,
-      customerId: cryptoRandomId(),
       shopifyCustomerId: BigInt(payload.id),
       email: payload.email ?? null,
       firstName: payload.first_name ?? null,
       lastName: payload.last_name ?? null,
-      createdAt: new Date(payload.created_at ?? Date.now()),
-      updatedAt: new Date(),
+      createdAt: payload.created_at ? new Date(payload.created_at) : undefined,
     },
   });
-}
-
-function cryptoRandomId(): Buffer {
-  const { randomBytes } = require('crypto');
-  return randomBytes(16);
 }
 
 

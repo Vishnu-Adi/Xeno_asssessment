@@ -1,8 +1,6 @@
-import { Prisma, Order, PrismaClient } from '@prisma/client';
+import { Prisma, Order, PrismaClient, OrderStatus } from '@prisma/client';
 import { getPrisma } from '@/lib/db';
 import { TenantScope } from '@/lib/tenant';
-
-export type OrderStatus = string;
 
 export async function listOrders(
   scope: TenantScope,
@@ -21,17 +19,17 @@ export async function listOrders(
     ...(params.status ? { status: params.status } : {}),
     ...(params.from || params.to ? createdAtFilter : {}),
   };
-  const cursor = params.cursor ? { tenantId_orderId: { tenantId: scope.tenantId, orderId: Buffer.from(params.cursor, 'hex') } } : undefined;
+  const cursor = params.cursor ? { id: BigInt(params.cursor) } : undefined;
   const items = await prisma.order.findMany({
     where,
-    orderBy: [{ createdAt: 'desc' }],
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: take + 1,
     ...(cursor ? { cursor, skip: 1 } : {}),
   });
   let nextCursor: string | null = null;
   if (items.length > take) {
     const next = items.pop()!;
-    nextCursor = Buffer.from(next.orderId).toString('hex');
+    nextCursor = String(next.id);
   }
   return { items, nextCursor };
 }
@@ -45,41 +43,33 @@ export async function getOrder(scope: TenantScope, shopifyOrderId: bigint): Prom
 
 export async function upsertFromShopify(
   scope: TenantScope,
-  payload: any,
+  payload: { id: string; created_at: string; current_total_price?: string; total_price?: string; currency?: string; presentment_currency?: string; financial_status?: string; customer?: { id: string } },
   client?: PrismaClient | Prisma.TransactionClient
 ): Promise<Order> {
   const prisma = (client ?? getPrisma());
   const createdAt = new Date(payload.created_at);
-  const subtotal = new Prisma.Decimal(payload.current_subtotal_price ?? payload.subtotal_price ?? '0');
   const total = new Prisma.Decimal(payload.current_total_price ?? payload.total_price ?? '0');
   const currency: string = payload.currency ?? payload.presentment_currency ?? 'USD';
-  const status: string = payload.financial_status ?? payload.fulfillment_status ?? 'unknown';
+  const status: OrderStatus = payload.financial_status === 'paid' ? OrderStatus.fulfilled : OrderStatus.pending;
   return prisma.order.upsert({
     where: { tenantId_shopifyOrderId: { tenantId: scope.tenantId, shopifyOrderId: BigInt(payload.id) } },
     update: {
       status,
-      subtotalPrice: subtotal,
       totalPrice: total,
       currency,
       createdAt,
     },
     create: {
       tenantId: scope.tenantId,
-      orderId: cryptoRandomId(),
       shopifyOrderId: BigInt(payload.id),
+      customerShopifyId: payload.customer?.id ? BigInt(payload.customer.id) : null,
       status,
-      subtotalPrice: subtotal,
       totalPrice: total,
       currency,
       createdAt,
-      updatedAt: new Date(),
     },
   });
 }
 
-function cryptoRandomId(): Buffer {
-  const { randomBytes } = require('crypto');
-  return randomBytes(16);
-}
 
 

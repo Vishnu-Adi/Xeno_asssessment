@@ -28,11 +28,7 @@ export async function POST(req: NextRequest) {
   );
   if (inserted === 0) return NextResponse.json({ ok: true, deduped: true });
 
-  await prisma.$transaction(async (tx) => {
-    // Use repos; swap client via tx
-    const subtotal = await OrdersRepo.upsertFromShopify({ tenantId }, payload);
-    void subtotal; // no-op
-  });
+  await OrdersRepo.upsertFromShopify({ tenantId }, payload);
 
   return NextResponse.json({ ok: true });
 }

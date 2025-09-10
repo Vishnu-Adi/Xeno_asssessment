@@ -101,7 +101,7 @@ function DashboardClient() {
   }, [ordersQuery.data])
 
   const gmv = summaryQuery.data?.totalRevenue ?? 0
-  const ordersCount = summaryQuery.data?._count ?? undefined // safeguard if API changes
+  const ordersCount = summaryQuery.data?.ordersCount ?? 0
   const aov = summaryQuery.data?.aov ?? 0
 
   return (
@@ -162,7 +162,7 @@ function DashboardClient() {
       <KpiRow
         loading={summaryQuery.isLoading}
         gmv={gmv}
-        orders={summaryQuery.data?.ordersCount ?? 0}
+        orders={ordersCount}
         aov={aov}
       />
 

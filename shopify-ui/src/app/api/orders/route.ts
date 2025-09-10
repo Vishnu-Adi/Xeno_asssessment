@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listOrders } from '@/repos/orders';
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant';
+import { OrderStatus } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -9,7 +10,10 @@ export async function GET(req: NextRequest) {
   const tenantId = await resolveTenantIdFromShopDomain(shop);
   const from = searchParams.get('from');
   const to = searchParams.get('to');
-  const status = searchParams.get('status') ?? undefined;
+  const statusParam = searchParams.get('status');
+  const status = statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus) 
+    ? (statusParam as OrderStatus) 
+    : undefined;
   const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
   const cursor = searchParams.get('cursor') ?? undefined;
   const result = await listOrders(
