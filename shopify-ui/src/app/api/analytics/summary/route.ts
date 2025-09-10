@@ -5,6 +5,13 @@ import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 import { Prisma } from '@prisma/client'
 export const runtime = 'nodejs'
 
+// ✅ helper: convert any BigInt to string for JSON
+function jsonBigInt<T>(data: T): T {
+  return JSON.parse(
+    JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+  )
+}
+
 export async function GET(req: NextRequest) {
   const prisma = getPrisma()
   const url = new URL(req.url)

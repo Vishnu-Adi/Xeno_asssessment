@@ -4,6 +4,13 @@ import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 export const runtime = 'nodejs'
 
+// ✅ helper: convert any BigInt to string for JSON
+function jsonBigInt<T>(data: T): T {
+  return JSON.parse(
+    JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+  )
+}
+
 export async function GET(req: NextRequest) {
   const prisma = getPrisma()
   const url = new URL(req.url)
@@ -27,5 +34,5 @@ export async function GET(req: NextRequest) {
     GROUP BY DATE(createdAt)
     ORDER BY day ASC;
   `
-  return NextResponse.json(rows)
+  return NextResponse.json(jsonBigInt(rows))
 }
