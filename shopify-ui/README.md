@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Multi-tenant Shopify App Scaffold (API-only)
 
-## Getting Started
+This repo provides a minimal, tenant-safe scaffold for a Shopify app using Next.js App Router, Prisma (MySQL), and type-safe repos.
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Environment
+Create `.env.local` with:
+```
+DATABASE_URL=mysql://user:pass@localhost:3306/shopify_mt
+SHOPIFY_API_KEY=...
+SHOPIFY_API_SECRET=...
+SHOPIFY_SCOPES=read_orders,read_products,read_customers
+SHOPIFY_APP_URL=http://localhost:3000
+SHOPIFY_REDIRECT_PATH=/api/oauth/callback
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Prisma
+- Provider: MySQL
+- All tables have `tenantId BINARY(16)` and unique/indexes are tenant-first.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Commands:
+```bash
+pnpm db:generate
+pnpm db:migrate
+pnpm db:seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Development
+```bash
+pnpm dev
+```
 
-## Learn More
+### API Routes
+- OAuth install: `GET /api/oauth/install?shop={shop-domain}`
+- OAuth callback: `GET /api/oauth/callback`
+- Webhooks (raw body + HMAC):
+  - `POST /api/webhooks/orders/create`
+  - `POST /api/webhooks/orders/updated`
+  - `POST /api/webhooks/customers/create`
+  - `POST /api/webhooks/customers/updated`
+  - `POST /api/webhooks/products/create`
+  - `POST /api/webhooks/products/updated`
+- Dashboard:
+  - `GET /api/analytics/summary?shop=...&from=...&to=...`
+  - `GET /api/orders?shop=...&from=...&to=...&status=...&limit=...&cursor=...`
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Notes
+- No WebSockets; polling can be added later.
+- All repos require `{ tenantId: Buffer }` and perform scoped queries.
