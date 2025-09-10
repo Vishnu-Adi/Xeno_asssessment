@@ -99,7 +99,11 @@ export async function GET(req: NextRequest) {
 
     // Success — you can redirect to your app UI if you prefer:
     // return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
-    return NextResponse.json({ ok: true })
+// app/api/oauth/callback/route.ts (or src/app/api/... based on your tree)
+
+  // Success — redirect to dashboard so install flow feels right
+return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
+
   } catch (err: any) {
     console.error('OAuth callback exception:', err)
     return NextResponse.json({ error: 'OAuth callback exception', detail: String(err?.message ?? err) }, { status: 500 })
