@@ -3,3 +3,4 @@ export function safeJson(obj: any) {
     JSON.stringify(obj, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
   )
 }
+

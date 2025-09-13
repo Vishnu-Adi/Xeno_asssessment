@@ -12,11 +12,21 @@ export async function GET(req: NextRequest) {
 
   const tenantId = await resolveTenantIdFromShopDomain(shop)
 
-  const items = await prisma.product.findMany({
+  const products = await prisma.product.findMany({
     where: { tenantId },
     orderBy: { updatedAt: 'desc' },
     take: 10
   })
 
-  return NextResponse.json(safeJson({ items }))
+  // Convert BigInt fields to strings to avoid JSON serialization errors
+  const items = products.map(product => ({
+    id: product.id.toString(),
+    tenantId: Buffer.from(product.tenantId).toString('hex'),
+    shopifyProductId: product.shopifyProductId.toString(),
+    title: product.title,
+    createdAt: product.createdAt.toISOString(),
+    updatedAt: product.updatedAt.toISOString()
+  }))
+
+  return NextResponse.json({ items })
 }
