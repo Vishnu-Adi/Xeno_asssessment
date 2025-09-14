@@ -92,5 +92,5 @@ export async function GET(req: NextRequest) {
     source
   }
 
-  return NextResponse.json(response)
+  return NextResponse.json(safeJson(response))
 }

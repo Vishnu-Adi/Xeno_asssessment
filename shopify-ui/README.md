@@ -1,3 +1,25 @@
+# Xeno Shopify Multi-tenant Analytics (Demo)
+
+## New: Storefront-only Data Simulator
+
+If you do not have Admin API access or PCDA, you can still light up the dashboard using only Storefront API tokens.
+
+### Quick Start
+
+1. Open `/simulator`
+2. Select your shop domain (e.g. `tenant-a-demo.myshopify.com`)
+3. Paste your Storefront API access token (read-products, cart access)
+4. Click "Backfill Products" then "Seed Carts"
+5. Open the Dashboard → the metrics will update in near real-time
+
+Behind the scenes:
+
+- `/api/admin/backfill-products-sfo` pulls published products via Storefront GraphQL and upserts them
+- `/api/debug/seed-carts` creates carts via Storefront and records synthetic cart rows for analytics
+- `/api/realtime/summary` streams live KPIs (SSE) and the dashboard auto-updates
+
+This path works without Admin webhooks and is perfect for assessments and demos.
+
 ## Multi-tenant Shopify App Scaffold (API-only)
 
 This repo provides a minimal, tenant-safe scaffold for a Shopify app using Next.js App Router, Prisma (MySQL), and type-safe repos.

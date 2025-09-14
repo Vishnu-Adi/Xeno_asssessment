@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 import { safeJson } from '@/lib/json'
 export const runtime = 'nodejs'
@@ -31,27 +32,49 @@ export async function GET(req: NextRequest) {
       whereConditions += ` AND status = '${status}'`
     }
 
-    // Get orders by date with aggregation
-    const ordersByDate = await prisma.$queryRaw<{
+    // Get orders by date with aggregation (primary source)
+    const where = Prisma.sql`
+      WHERE tenantId = ${tenantId}
+        AND createdAt >= ${start}
+        AND createdAt <= ${end}
+        ${status && ['pending', 'fulfilled', 'cancelled'].includes(status) ? Prisma.sql` AND status = ${status}` : Prisma.empty}
+    `
+
+    let ordersByDate = await prisma.$queryRaw<{
       date: string;
       orderCount: number;
       totalRevenue: number;
       avgOrderValue: number;
-    }[]>`
+    }[]>(Prisma.sql`
       SELECT 
         DATE(createdAt) as date,
         COUNT(*) as orderCount,
         SUM(totalPrice) as totalRevenue,
         AVG(totalPrice) as avgOrderValue
       FROM \`Order\`
-      WHERE tenantId = ${tenantId}
-        AND createdAt >= ${start}
-        AND createdAt <= ${end}
-        ${status && ['pending', 'fulfilled', 'cancelled'].includes(status) ? 
-          prisma.$queryRawUnsafe(`AND status = '${status}'`) : prisma.$queryRawUnsafe('')}
+      ${where}
       GROUP BY DATE(createdAt)
       ORDER BY date ASC
-    `
+    `)
+
+    // Fallback: if no orders present, infer from Checkout or Cart as pseudo-orders
+    if (!ordersByDate || ordersByDate.length === 0) {
+      const checkoutRows = await prisma.$queryRaw<{
+        date: string; orderCount: number; totalRevenue: number; avgOrderValue: number;
+      }[]>(Prisma.sql`
+        SELECT DATE(createdAt) as date,
+               COUNT(*) as orderCount,
+               SUM(totalPrice) as totalRevenue,
+               AVG(totalPrice) as avgOrderValue
+        FROM Checkout
+        WHERE tenantId = ${tenantId}
+          AND createdAt >= ${start}
+          AND createdAt <= ${end}
+        GROUP BY DATE(createdAt)
+        ORDER BY date ASC
+      `)
+      ordersByDate = checkoutRows
+    }
 
     // Get individual orders for the period (limited to 50 most recent)
     const recentOrders = await prisma.order.findMany({

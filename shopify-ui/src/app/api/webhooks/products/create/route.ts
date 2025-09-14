@@ -1,4 +1,5 @@
 // src/app/api/webhooks/products/create/route.ts
+// UPDATED FOR NEW GRAPHQL PRODUCT APIS - Compatible with both old and new webhook formats
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getEnv } from '@/lib/env'
@@ -21,11 +22,41 @@ export async function POST(req: NextRequest) {
 
   await prisma.webhookEvent.create({ data: { tenantId, eventId, eventType: 'products/create' } }).catch(()=>null)
 
+  // Handle both old REST format (numeric ID) and new GraphQL format (global ID)
+  let productId: string
+  if (typeof payload.id === 'string' && payload.id.includes('gid://shopify/Product/')) {
+    // New GraphQL format: gid://shopify/Product/123 -> 123
+    productId = payload.id.split('/').pop()
+  } else {
+    // Old REST format: numeric ID
+    productId = String(payload.id)
+  }
+
+  // Enhanced product data handling for new API structure
+  const productData = {
+    title: payload.title,
+    updatedAt: new Date(),
+    // Handle additional fields that may be present in new API
+    ...(payload.handle && { handle: payload.handle }),
+    ...(payload.status && { status: payload.status }),
+    ...(payload.created_at && { createdAt: new Date(payload.created_at) })
+  }
+
   await prisma.product.upsert({
-    where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(payload.id) } },
-    update: { title: payload.title },
-    create: { tenantId, shopifyProductId: BigInt(payload.id), title: payload.title }
+    where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(productId) } },
+    update: productData,
+    create: { 
+      tenantId, 
+      shopifyProductId: BigInt(productId), 
+      ...productData,
+      createdAt: productData.createdAt || new Date()
+    }
   })
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ 
+    ok: true, 
+    productId, 
+    apiCompatible: true,
+    format: payload.id.toString().includes('gid://') ? 'graphql' : 'rest'
+  })
 }

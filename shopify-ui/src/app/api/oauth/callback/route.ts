@@ -1,8 +1,10 @@
 // src/app/api/oauth/callback/route.ts
+// UPDATED FOR SHOPIFY API MIGRATION COMPLIANCE - Using 2024-10 API version
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnv } from '@/lib/env'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
+import { checkMigrationCompliance } from '@/lib/shopify-api-migration'
 
 export const runtime = 'nodejs' // ✅ Next 15 expects 'nodejs' or 'edge'
 
@@ -65,20 +67,26 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 5) Register minimal webhooks (best-effort; log failures)
+    // 5) Check migration compliance and register webhooks
+    const compliance = checkMigrationCompliance()
+    console.log('Shopify API Migration Status:', compliance)
+
     const topics = [
       'products/create',
       'products/update',
+      'customers/create',
+      'customers/update',
+      'orders/create',
+      'orders/update',
       'carts/create',
       'carts/update',
       'app/uninstalled',
-      // keep orders/* commented until PCDA is approved
     ]
 
- 
-    
     const baseWebhookUrl = `${env.SHOPIFY_APP_URL}/api/webhooks`
+    const webhookResults: Array<{ topic: string; success: boolean; error?: string }> = []
 
+    // Use 2024-10 API version for webhook registration (migration compliant)
     await Promise.all(
       topics.map(async (topic) => {
         try {
@@ -89,20 +97,41 @@ export async function GET(req: NextRequest) {
               'X-Shopify-Access-Token': accessToken
             },
             body: JSON.stringify({
-              webhook: { topic, format: 'json', address: `${baseWebhookUrl}/${topic}` }
+              webhook: { 
+                topic, 
+                format: 'json', 
+                address: `${baseWebhookUrl}/${topic.replace('/', '/')}` // Ensure correct URL format
+              }
             })
           })
-          if (!resp.ok) {
-            console.error('Failed to register webhook', topic, await resp.text())
+          
+          if (resp.ok) {
+            webhookResults.push({ topic, success: true })
+            console.log(`✅ Webhook registered: ${topic}`)
+          } else {
+            const errorText = await resp.text()
+            webhookResults.push({ topic, success: false, error: errorText })
+            console.error(`❌ Failed to register webhook ${topic}:`, errorText)
           }
         } catch (err: unknown) {
-          console.error('Webhook registration error', topic, err)
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          webhookResults.push({ topic, success: false, error: errorMsg })
+          console.error(`❌ Webhook registration error ${topic}:`, errorMsg)
         }
       })
     )
 
+    // Add compliance info to redirect URL for dashboard display
+    const complianceParams = new URLSearchParams({
+      shop,
+      migrationCompliant: compliance.isCompliant.toString(),
+      daysRemaining: compliance.daysRemaining.toString(),
+      webhooksRegistered: webhookResults.filter(w => w.success).length.toString(),
+      totalWebhooks: webhookResults.length.toString()
+    })
+
     // Redirect to your dashboard after install
-    return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard`)
+    return NextResponse.redirect(`${env.SHOPIFY_APP_URL}/dashboard?${complianceParams.toString()}`)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('OAuth callback exception:', msg)

@@ -1,5 +1,7 @@
 // src/app/api/debug/seed-carts/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { getPrisma } from '@/lib/db'
+import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 export const runtime = 'nodejs'
 
 function sfoTokenFor(shop: string) {
@@ -9,11 +11,13 @@ function sfoTokenFor(shop: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { shop, count = 5 } = (await req.json()) as { shop: string; count?: number }
+  const { shop, count = 5, token: tokenFromBody } = (await req.json()) as { shop: string; count?: number; token?: string }
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
-  const token = sfoTokenFor(shop)
+  const token = tokenFromBody || sfoTokenFor(shop)
   const endpoint = `https://${shop}/api/2024-10/graphql.json`
+  const prisma = getPrisma()
+  const tenantId = await resolveTenantIdFromShopDomain(shop)
 
   // 1) storefront-visible variant
   const q = `
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
   const mutation = `
     mutation cartCreate($lines: [CartLineInput!]) {
       cartCreate(input: { lines: $lines }) {
-        cart { id checkoutUrl }
+        cart { id checkoutUrl estimatedCost { totalAmount { amount currencyCode } } }
         userErrors { field message }
       }
     }
@@ -53,11 +57,28 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ query: mutation, variables: { lines: [{ merchandiseId: variantId, quantity: 1 }] } })
     })
     const mJson = await mRes.json()
-    const url = mJson?.data?.cartCreate?.cart?.checkoutUrl
+    const cart = mJson?.data?.cartCreate?.cart
+    const url = cart?.checkoutUrl
+    const cartId = cart?.id
+    const amount = Number(cart?.estimatedCost?.totalAmount?.amount ?? 0)
+    const currency = cart?.estimatedCost?.totalAmount?.currencyCode ?? 'USD'
     const uerr = mJson?.data?.cartCreate?.userErrors?.map((e: any) => e.message) ?? []
     if (url) created.push(url)
     if (uerr.length) errors.push(...uerr)
     if (mJson?.errors) errors.push(...mJson.errors.map((e: any) => e.message))
+
+    // Persist a synthetic cart row so dashboard activates even without Admin webhooks
+    if (cartId) {
+      try {
+        await prisma.cart.upsert({
+          where: { tenantId_cartToken: { tenantId, cartToken: cartId } },
+          update: { currency, totalPrice: amount.toString() },
+          create: { tenantId, cartToken: cartId, currency, totalPrice: amount.toString(), createdAt: new Date() }
+        })
+      } catch (e) {
+        // ignore write errors in seeding
+      }
+    }
   }
 
   return NextResponse.json({ ok: true, created, errors })

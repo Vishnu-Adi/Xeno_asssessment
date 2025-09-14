@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listOrders } from '@/repos/orders';
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant';
 import { OrderStatus } from '@prisma/client';
+import { safeJson } from '@/lib/json';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -20,7 +21,6 @@ export async function GET(req: NextRequest) {
     { tenantId },
     { from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined, status, limit, cursor }
   );
-  return NextResponse.json(result);
+  return NextResponse.json(safeJson(result));
 }
-
 

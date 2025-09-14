@@ -8,10 +8,10 @@ function sfoTokenFor(shop: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { shop, count = 5 } = (await req.json()) as { shop: string; count?: number }
+  const { shop, count = 5, token: tokenFromBody } = (await req.json()) as { shop: string; count?: number; token?: string }
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
-  const token = sfoTokenFor(shop)
+  const token = tokenFromBody || sfoTokenFor(shop)
   const endpoint = `https://${shop}/api/2024-10/graphql.json`
 
   // 1) pick a storefront-visible variant (product must be Available on Online Store)

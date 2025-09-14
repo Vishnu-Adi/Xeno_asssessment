@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 import { safeJson } from '@/lib/json'
 export const runtime = 'nodejs'
@@ -13,14 +14,14 @@ export async function GET(req: NextRequest) {
 
   try {
     // Get top customers by total spend (from orders)
-    const topCustomers = await prisma.$queryRaw<{
+    let topCustomers = await prisma.$queryRaw<{
       shopifyCustomerId: string;
       email: string;
       firstName: string;
       lastName: string;
       totalSpend: number;
       orderCount: number;
-    }[]>`
+    }[]>(Prisma.sql`
       SELECT 
         c.shopifyCustomerId,
         c.email,
@@ -35,7 +36,32 @@ export async function GET(req: NextRequest) {
       GROUP BY c.id, c.shopifyCustomerId, c.email, c.firstName, c.lastName
       ORDER BY totalSpend DESC
       LIMIT 5
-    `
+    `)
+
+    // Fallback: if no customers are present, rank by orders only
+    if (!topCustomers || topCustomers.length === 0) {
+      const orderAgg = await prisma.$queryRaw<{
+        customerShopifyId: string; totalSpend: number; orderCount: number;
+      }[]>(Prisma.sql`
+        SELECT 
+          CAST(customerShopifyId AS CHAR) as customerShopifyId,
+          COALESCE(SUM(totalPrice),0) as totalSpend,
+          COUNT(id) as orderCount
+        FROM \`Order\`
+        WHERE tenantId = ${tenantId}
+        GROUP BY customerShopifyId
+        ORDER BY totalSpend DESC
+        LIMIT 5
+      `)
+      topCustomers = orderAgg.map((o) => ({
+        shopifyCustomerId: o.customerShopifyId || '',
+        email: 'Unknown',
+        firstName: '',
+        lastName: '',
+        totalSpend: Number(o.totalSpend || 0),
+        orderCount: Number(o.orderCount || 0),
+      })) as any
+    }
 
     // Convert to safe JSON format
     const customers = topCustomers.map(customer => ({
