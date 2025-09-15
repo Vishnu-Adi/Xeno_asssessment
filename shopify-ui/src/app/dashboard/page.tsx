@@ -369,36 +369,70 @@ export default function Dashboard() {
 
 function OrdersTable({ shop, start, end }: { shop:string; start:string; end:string }){
   const [q, setQ] = useState("")
+  const [debouncedQ, setDebouncedQ] = useState("")
   const [status, setStatus] = useState("all")
   const [after, setAfter] = useState<string | undefined>(undefined)
   const [sort, setSort] = useState<'asc'|'desc'>('desc')
   const pageSize = 10
 
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQ(q), 500);
+    return () => clearTimeout(timer);
+  }, [q]);
+
   const list = useQuery<{ shop:string; window:{start:string;end:string}; pageInfo:{hasNextPage:boolean;endCursor?:string}; items:any[] }>({
-    queryKey: ['orders-list', shop, start, end, q, status, after, sort],
-    queryFn: async () => (await fetch(`/api/orders/list?shop=${shop}&startDate=${start}&endDate=${end}&q=${encodeURIComponent(q)}&status=${status}&after=${after ?? ''}&sort=${sort}&limit=${pageSize}`)).json(),
+    queryKey: ['orders-list', shop, start, end, debouncedQ, status, after, sort],
+    queryFn: async () => {
+      const url = `/api/orders/list?shop=${shop}&startDate=${start}&endDate=${end}&q=${encodeURIComponent(debouncedQ)}&status=${status}&after=${after ?? ''}&sort=${sort}&limit=${pageSize}`;
+      console.log('Fetching orders:', url);
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log('Orders response:', data);
+      return data;
+    },
+    enabled: !!shop,
+    refetchInterval: 30000,
   })
 
   const items = list.data?.items ?? []
 
+  // Reset pagination when filters change
+  React.useEffect(()=>{ 
+    console.log('Resetting pagination due to filter change');
+    setAfter(undefined) 
+  }, [shop, start, end, debouncedQ, status, sort])
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search email or order id" className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm" />
+        <input 
+          value={q} 
+          onChange={(e)=>setQ(e.target.value)} 
+          placeholder="Search email or order id (e.g., alice@example.com or #1001)" 
+          className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm min-w-[300px]" 
+        />
         <select value={status} onChange={(e)=>setStatus(e.target.value)} className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm">
-          <option value="all">All</option>
+          <option value="all">All Status</option>
           <option value="fulfilled">Fulfilled</option>
           <option value="unfulfilled">Unfulfilled</option>
           <option value="partial">Partial</option>
         </select>
         <select value={sort} onChange={(e)=>setSort(e.target.value as any)} className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm">
-          <option value="desc">Newest</option>
-          <option value="asc">Oldest</option>
+          <option value="desc">Newest First</option>
+          <option value="asc">Oldest First</option>
         </select>
-        <Button size="sm" variant="outline" className="border-white/10" onClick={()=>setAfter(undefined)}>Reset</Button>
+        <Button size="sm" variant="outline" className="border-white/10" onClick={()=>{setQ(''); setStatus('all'); setAfter(undefined)}}>Clear</Button>
+        {list.isLoading && <div className="text-xs text-gray-400">Loading...</div>}
       </div>
 
       <div className="overflow-x-auto">
+        {list.isError && (
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-4">
+            Error loading orders: {list.error?.message || 'Unknown error'}
+          </div>
+        )}
+        
         <table className="w-full text-sm">
           <thead className="text-left text-gray-400">
             <tr>
@@ -421,6 +455,13 @@ function OrdersTable({ shop, start, end }: { shop:string; start:string; end:stri
                 <td className="py-2 text-gray-300">{o.fulfillment.toLowerCase()}</td>
               </tr>
             ))}
+            {items.length === 0 && !list.isLoading && (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-gray-400">
+                  {debouncedQ || status !== 'all' ? 'No orders match your filters' : 'No orders found'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

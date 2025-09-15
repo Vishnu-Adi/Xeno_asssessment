@@ -22,21 +22,47 @@ const ORDERS_LIST_Q = `
   }
 `;
 
+function quote(s: string) {
+  // Wrap in quotes if contains special chars or @ to ensure Shopify query parsing
+  if (/[@\s:#]/.test(s)) return `"${s}"`;
+  return s;
+}
+
 function buildQuery(start: string, end: string, search?: string | null, status?: string | null) {
   const parts: string[] = [];
   parts.push(`created_at:>=${start}`);
   parts.push(`created_at:<=${end}`);
-  if (search) {
+  if (search && search.trim()) {
     const s = search.trim();
-    // search by email or order name/id
-    parts.push(`(email:${s} OR name:${s})`);
+    console.log('Building search query for:', s);
+    
+    if (s.includes('@')) {
+      // Email search
+      parts.push(`email:"${s}"`);
+    } else if (s.startsWith('#')) {
+      // Order name search with hash
+      parts.push(`name:"${s}"`);
+    } else if (/^\d+$/.test(s)) {
+      // Numeric order number - try both with and without hash
+      parts.push(`(name:"#${s}" OR name:"${s}")`);
+    } else {
+      // General text search - try in both email and name
+      parts.push(`(email:"${s}" OR name:"${s}" OR name:"#${s}")`);
+    }
   }
   if (status && status !== 'all') {
-    const map: Record<string,string> = { fulfilled: 'fulfilled', unfulfilled: 'unfulfilled', partial: 'partial' };
-    const v = map[status] || status;
-    parts.push(`fulfillment_status:${v}`);
+    const statusMap: Record<string,string> = { 
+      fulfilled: 'fulfilled', 
+      unfulfilled: 'unfulfilled', 
+      partial: 'partial' 
+    };
+    const mappedStatus = statusMap[status] || status;
+    console.log('Adding status filter:', status, '->', mappedStatus);
+    parts.push(`fulfillment_status:${mappedStatus}`);
   }
-  return parts.join(' ');
+  const query = parts.join(' AND ');
+  console.log('Final Shopify query:', query);
+  return query;
 }
 
 export async function GET(req: NextRequest) {

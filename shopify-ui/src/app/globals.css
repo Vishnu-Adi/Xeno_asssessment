@@ -1,12 +1,9 @@
-/* Re-enable Tailwind */
+
 @import "tailwindcss";
 
-/* Remove invalid tw-animate-css import */
-
-/* Removed @config directive and using CSS variables approach instead */
 
 :root {
-  /* Light theme (fallback) */
+
   --background: oklch(0.98 0 0);
   --foreground: oklch(0.15 0 0);
   --card: oklch(0.98 0 0);
@@ -42,7 +39,7 @@
   --sidebar-ring: oklch(0.55 0.15 264);
 }
 
-/* Using .dark class with enhanced dark theme colors */
+
 .dark {
   --background: oklch(0.08 0 0);
   --foreground: oklch(0.98 0 0);

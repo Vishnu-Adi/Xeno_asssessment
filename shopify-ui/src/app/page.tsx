@@ -8,7 +8,7 @@ export default function Home() {
       <div className="pointer-events-none absolute -top-24 -left-24 h-[28rem] w-[28rem] rounded-full bg-purple-500/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-24 h-[32rem] w-[32rem] rounded-full bg-cyan-500/15 blur-3xl" />
 
-      {/* Nav (minimal) */}
+      {/* Nav */}
       <nav className="relative z-10 px-6 py-5">
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
@@ -30,8 +30,8 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Hero (compact) */}
-      <main className="relative z-10 px-6 pt-16 pb-28">
+      {/* Hero (centered) */}
+      <main className="relative z-10 px-6 min-h-[calc(100vh-80px)] grid place-items-center">
         <div className="mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 glass rounded-full px-3 py-1 text-sm text-gray-300 mb-8">
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -58,7 +58,7 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* tiny trust chips; still compact */}
+
           <div className="mt-10 flex flex-wrap justify-center gap-3 text-xs text-gray-400">
             <span className="glass rounded-full px-3 py-1">Row-level tenant isolation</span>
             <span className="glass rounded-full px-3 py-1">Cart/checkout signal ingestion</span>

@@ -83,8 +83,8 @@ export default function SignIn() {
       </nav>
 
       {/* content */}
-      <main className="relative z-10 px-6">
-        <div className="mx-auto max-w-md pt-8 pb-24">
+      <main className="relative z-10 px-6 min-h-[calc(100vh-80px)] grid place-items-center">
+        <div className="mx-auto max-w-md py-8">
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 glass rounded-full px-3 py-1 text-sm text-gray-300 mb-5">
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> secure sign-in
