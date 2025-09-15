@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
         }
       }
     `
-    const res = await fetch(endpoint, {
+    const res: Response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken! },
       body: JSON.stringify({ query, variables: { first: Math.min(100, Number(first)), after: cursor } })
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const edges = json?.data?.customers?.edges ?? []
     for (const edge of edges) {
       const c = edge.node
-      const id = String(c.id).split('/').pop()
+      const id = String(c.id).split('/').pop()!
       await CustomersRepo.upsertFromShopify({ tenantId }, {
         id,
         email: c.email ?? undefined,

@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   if (!shop) {
     return new Response('missing shop', { status: 400 })
   }
+  const shopDomain: string = shop
   const tenantId = await resolveTenantIdFromShopDomain(shop)
 
   const stream = new ReadableStream({
@@ -28,10 +29,77 @@ export async function GET(req: NextRequest) {
         let value24h = 0
         let completionRate7d = 0
 
-        const [productCount, newProducts7d] = await Promise.all([
-          prisma.product.count({ where: { tenantId } }),
-          prisma.product.count({ where: { tenantId, createdAt: { gte: d7 } } }),
-        ])
+        // Get product count directly from Shopify for accuracy
+        let productCount = 0
+        let newProducts7d = 0
+        
+        try {
+          // Get store access token for this shop
+          const store = await prisma.store.findFirst({
+            where: { shopDomain: shopDomain },
+            select: { accessToken: true }
+          })
+          
+          if (store?.accessToken) {
+            // Fetch active products from Shopify
+            const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Shopify-Access-Token': store.accessToken,
+              },
+              body: JSON.stringify({
+                query: `{
+                  products(first: 250, query: "status:active") {
+                    edges {
+                      node {
+                        id
+                        createdAt
+                      }
+                    }
+                  }
+                }`
+              })
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              const products = data.data?.products?.edges || []
+              productCount = products.length
+              
+              // Count products created in last 7 days
+              newProducts7d = products.filter((edge: any) => {
+                const createdAt = new Date(edge.node.createdAt)
+                return createdAt >= d7
+              }).length
+            } else {
+              // Fallback to local DB
+              const [localCount, localNew] = await Promise.all([
+                prisma.product.count({ where: { tenantId } }),
+                prisma.product.count({ where: { tenantId, createdAt: { gte: d7 } } }),
+              ])
+              productCount = localCount
+              newProducts7d = localNew
+            }
+          } else {
+            // No access token, use local DB
+            const [localCount, localNew] = await Promise.all([
+              prisma.product.count({ where: { tenantId } }),
+              prisma.product.count({ where: { tenantId, createdAt: { gte: d7 } } }),
+            ])
+            productCount = localCount
+            newProducts7d = localNew
+          }
+        } catch (error) {
+          console.error('Failed to fetch products from Shopify:', error)
+          // Fallback to local DB
+          const [localCount, localNew] = await Promise.all([
+            prisma.product.count({ where: { tenantId } }),
+            prisma.product.count({ where: { tenantId, createdAt: { gte: d7 } } }),
+          ])
+          productCount = localCount
+          newProducts7d = localNew
+        }
 
         const [checkoutCount, cartCount] = await Promise.all([
           prisma.checkout.count({ where: { tenantId } }).catch(() => 0),

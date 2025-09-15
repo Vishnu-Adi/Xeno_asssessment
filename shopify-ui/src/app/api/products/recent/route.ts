@@ -1,32 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPrisma } from '@/lib/db'
-import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
-import { safeJson } from '@/lib/json'
+import { adminFetch } from '@/lib/shopify-admin'
 export const runtime = 'nodejs'
 
+const RECENT_PRODUCTS_QUERY = `
+  query RecentProducts($first: Int!) {
+    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
+      edges {
+        node {
+          id
+          title
+          updatedAt
+          status
+        }
+      }
+    }
+  }
+`
+
 export async function GET(req: NextRequest) {
-  const prisma = getPrisma()
   const url = new URL(req.url)
   const shop = url.searchParams.get('shop')
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
-  const tenantId = await resolveTenantIdFromShopDomain(shop)
-
-  const products = await prisma.product.findMany({
-    where: { tenantId },
-    orderBy: { updatedAt: 'desc' },
-    take: 10
-  })
-
-  // Convert BigInt fields to strings to avoid JSON serialization errors
-  const items = products.map(product => ({
-    id: product.id.toString(),
-    tenantId: Buffer.from(product.tenantId).toString('hex'),
-    shopifyProductId: product.shopifyProductId.toString(),
-    title: product.title,
-    createdAt: product.createdAt.toISOString(),
-    updatedAt: product.updatedAt.toISOString()
-  }))
-
-  return NextResponse.json({ items })
+  try {
+    const data = await adminFetch(shop, RECENT_PRODUCTS_QUERY, { first: 10 })
+    const items = (data.products.edges || []).map((e: any) => ({
+      id: e.node.id,
+      title: e.node.title,
+      updatedAt: e.node.updatedAt,
+      status: e.node.status || 'ACTIVE'
+    }))
+    return NextResponse.json({ items })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+  }
 }

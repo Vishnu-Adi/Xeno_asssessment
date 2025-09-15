@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       }
     `
 
-    const res = await fetch(endpoint, {
+    const res: Response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     for (const edge of edges) {
       const node = edge?.node
       if (!node?.id) continue
-      const numericId: string = String(node.id).split('/').pop()
+      const numericId: string = String(node.id).split('/').pop()!
       await prisma.product.upsert({
         where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(numericId) } },
         update: { title: node.title ?? 'Untitled', updatedAt: new Date(node.updatedAt ?? Date.now()) },

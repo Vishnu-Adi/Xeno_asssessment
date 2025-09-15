@@ -1,262 +1,217 @@
-'use client'
+"use client"
 
-import { signIn, getSession } from 'next-auth/react'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import Link from 'next/link'
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { signIn } from "next-auth/react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Eye, EyeOff, ArrowRight, Mail, Lock } from "lucide-react"
 
 export default function SignIn() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState("")
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const session = await getSession()
-      if (session) {
-        router.push('/dashboard')
-      }
-    }
-    checkSession()
-  }, [router])
-
-  const handleCredentialsSignIn = async (e: React.FormEvent) => {
+  async function handleCredentialsSignIn(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setMessage('')
-
+    setMessage("")
     try {
-      const result = await signIn('credentials', {
+      const res = await signIn("credentials", {
         email,
         password,
         redirect: false,
-        callbackUrl: '/dashboard'
+        callbackUrl: "/dashboard",
       })
-
-      if (result?.error) {
-        setMessage('Invalid credentials. Please try again.')
-      } else if (result?.ok) {
-        setMessage('Sign in successful! Redirecting...')
-        router.push('/dashboard')
-      }
-    } catch (error) {
-      setMessage('An error occurred. Please try again.')
+      if (res?.error) setMessage("Invalid credentials. Please try again.")
+      else if (res?.ok) router.push("/dashboard")
+    } catch {
+      setMessage("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
+  async function handleMagicLinkSignIn(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setMessage('')
-
+    setMessage("")
     try {
-      const result = await signIn('email', {
-        email,
-        redirect: false,
-        callbackUrl: '/dashboard'
-      })
-
-      if (result?.error) {
-        if (result.error === 'Configuration') {
-          setMessage('Email service is not configured. Please use the demo credentials above or contact support.')
-        } else {
-          setMessage('Failed to send magic link. Please try again.')
-        }
-      } else {
-        setMessage('Magic link sent! Check your email.')
+      const res = await signIn("email", { email, redirect: false, callbackUrl: "/dashboard" })
+      if (res?.error) setMessage("Failed to send magic link. Please try again.")
+      else {
+        setMagicLinkSent(true)
+        setMessage("Magic link sent! Check your email.")
       }
-    } catch (error) {
-      setMessage('Email service is not available. Please use the demo credentials above.')
+    } catch {
+      setMessage("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -inset-10 opacity-30">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
-          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-1000"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-2000"></div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black via-slate-900/60 to-black" />
+      <div className="pointer-events-none absolute -top-24 -left-24 h-[28rem] w-[28rem] rounded-full bg-purple-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-24 h-[32rem] w-[32rem] rounded-full bg-cyan-500/15 blur-3xl" />
 
-      <div className="relative z-10 w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center space-x-2 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold">X</span>
+      {/* nav (minimal) */}
+      <nav className="relative z-10 px-6 py-5">
+        <div className="mx-auto max-w-7xl flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
+              <span className="text-black font-bold">X</span>
             </div>
-            <span className="text-white font-semibold text-xl">Xeno Analytics</span>
+            <span className="font-semibold">Xeno Analytics</span>
           </Link>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Sign in to access your analytics dashboard</p>
+          <Link
+            href="/"
+            className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/5 lift"
+          >
+            Back
+          </Link>
         </div>
+      </nav>
 
-        {/* Main Sign In Card */}
-        <div className="relative">
-          <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 via-cyan-500 to-pink-500 rounded-2xl blur opacity-30"></div>
-          <Card className="relative bg-slate-800/50 backdrop-blur-sm border-slate-700/50">
-            <CardHeader className="text-center pb-4">
-              <CardTitle className="text-white text-2xl">Demo Access</CardTitle>
-              <CardDescription className="text-slate-400">
-                Use demo credentials to explore the platform
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Demo Credentials Info */}
-              <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                <div className="text-center space-y-2">
-                  <p className="text-slate-300 text-sm font-medium">Demo Credentials</p>
-                  <div className="space-y-1 text-sm">
-                    <p className="text-slate-400">
-                      Email: <code className="bg-slate-700 px-2 py-1 rounded text-slate-300">demo@example.com</code>
-                    </p>
-                    <p className="text-slate-400">
-                      Password: <code className="bg-slate-700 px-2 py-1 rounded text-slate-300">demo123</code>
-                    </p>
-                  </div>
-                </div>
-              </div>
+      {/* content */}
+      <main className="relative z-10 px-6">
+        <div className="mx-auto max-w-md pt-8 pb-24">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 glass rounded-full px-3 py-1 text-sm text-gray-300 mb-5">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> secure sign-in
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Welcome back</h1>
+            <p className="text-gray-400 mt-2">Sign in to access your dashboard</p>
+          </div>
 
-              {/* Sign In Form */}
-              <form onSubmit={handleCredentialsSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-300">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="demo@example.com"
-                    className="bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-purple-500 focus:ring-purple-500/20"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-slate-300">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="demo123"
-                    className="bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-purple-500 focus:ring-purple-500/20"
-                    required
-                  />
-                </div>
-                
-                {message && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    message.includes('successful') 
-                      ? 'bg-green-900/30 border border-green-700/50 text-green-400' 
-                      : message.includes('sent')
-                      ? 'bg-blue-900/30 border border-blue-700/50 text-blue-400'
-                      : 'bg-red-900/30 border border-red-700/50 text-red-400'
-                  }`}>
-                    {message}
-                  </div>
-                )}
+          <div className="glass rounded-2xl p-6">
+            <Tabs defaultValue="credentials" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-white/5 mb-6">
+                <TabsTrigger value="credentials" className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" /> Password
+                </TabsTrigger>
+                <TabsTrigger value="magic-link" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" /> Magic Link
+                </TabsTrigger>
+              </TabsList>
 
-                <Button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-3 rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-xl hover:shadow-purple-500/25"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      <span>Signing in...</span>
-                    </div>
-                  ) : (
-                    'Access Dashboard'
-                  )}
-                </Button>
-              </form>
-
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-slate-700/50" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-800 px-2 text-slate-500">Or continue with</span>
-                </div>
-              </div>
-
-              {/* Magic Link Form */}
-              <div className="space-y-4">
-                <div className="p-3 bg-amber-900/20 border border-amber-700/30 rounded-lg">
-                  <p className="text-amber-400 text-sm text-center">
-                    ⚠️ Magic link authentication is not configured. Use demo credentials above.
-                  </p>
-                </div>
-                <form onSubmit={handleMagicLinkSignIn} className="space-y-4">
+              <TabsContent value="credentials">
+                <form onSubmit={handleCredentialsSignIn} className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="magic-email" className="text-slate-300">Email for Magic Link</Label>
+                    <Label htmlFor="email" className="text-gray-300 text-sm">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-gray-300 text-sm">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400 pr-11"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {message && (
+                    <div
+                      className={`rounded-lg border px-3 py-2 text-sm ${
+                        message.includes("sent") || message.includes("success")
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                          : "bg-red-500/10 border-red-500/20 text-red-300"
+                      }`}
+                    >
+                      {message}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-11 bg-white text-black hover:bg-gray-100 font-semibold lift"
+                  >
+                    {loading ? "Signing in…" : (
+                      <span className="inline-flex items-center gap-2">
+                        Continue <ArrowRight className="h-4 w-4" />
+                      </span>
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="magic-link">
+                <form onSubmit={handleMagicLinkSignIn} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="magic-email" className="text-gray-300 text-sm">Email</Label>
                     <Input
                       id="magic-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      className="bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-cyan-500/20"
+                      placeholder="you@example.com"
+                      className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+                      required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    disabled={loading}
-                    variant="outline"
-                    className="w-full bg-slate-900/50 border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white hover:border-cyan-500 transition-all duration-300"
+
+                  {magicLinkSent && (
+                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-300">
+                      Magic link sent! Check your email.
+                    </div>
+                  )}
+
+                  {message && !magicLinkSent && (
+                    <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      {message}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loading || magicLinkSent}
+                    className="w-full h-11 bg-white text-black hover:bg-gray-100 font-semibold lift disabled:opacity-50"
                   >
-                    Send Magic Link
+                    {loading ? "Sending…" : "Send magic link"}
                   </Button>
                 </form>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </TabsContent>
+            </Tabs>
+          </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8 space-y-4">
-          <p className="text-slate-500 text-sm">
-            Don't have an account? This is a demo platform - use the credentials above.
-          </p>
-          <Link 
-            href="/" 
-            className="inline-flex items-center text-slate-400 hover:text-white transition-colors text-sm"
-          >
-            ← Back to homepage
-          </Link>
-        </div>
-
-        {/* Feature highlights */}
-        <div className="mt-12 grid grid-cols-3 gap-4 text-center">
-          <div className="p-3 bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700/30">
-            <div className="text-purple-400 text-xl mb-1">📊</div>
-            <div className="text-slate-400 text-xs">Analytics</div>
-          </div>
-          <div className="p-3 bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700/30">
-            <div className="text-cyan-400 text-xl mb-1">⚡</div>
-            <div className="text-slate-400 text-xs">Real-time</div>
-          </div>
-          <div className="p-3 bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700/30">
-            <div className="text-pink-400 text-xl mb-1">🛡️</div>
-            <div className="text-slate-400 text-xs">Secure</div>
+          <div className="text-center mt-6">
+            <Link href="/" className="text-gray-400 hover:text-white text-sm">← Back to home</Link>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
