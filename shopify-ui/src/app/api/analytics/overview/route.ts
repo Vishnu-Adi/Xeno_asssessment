@@ -1,4 +1,3 @@
-// src/app/api/analytics/overview/route.ts - Real Shopify API Integration
 import { NextRequest, NextResponse } from "next/server";
 import { adminFetch } from "@/lib/shopify-admin";
 
@@ -32,15 +31,15 @@ export async function GET(req: NextRequest) {
     const shop = searchParams.get("shop");
     if (!shop) return NextResponse.json({ error: "Missing shop" }, { status: 400 });
 
-    // Date window (default last 30 days for better insights)
+
     const end = searchParams.get("endDate") ?? new Date().toISOString().slice(0, 10);
     const start = searchParams.get("startDate") ?? 
-      new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
-    // Shopify order query format: created_at:>=2025-09-01 created_at:<=2025-09-15
+
     const ordersQuery = `created_at:>=${start} created_at:<=${end}`;
 
-    // Fetch data from Shopify Admin GraphQL
+
     const data = await adminFetch(shop, OVERVIEW_QUERY, {
       ordersQuery,
       first: 250
@@ -50,24 +49,24 @@ export async function GET(req: NextRequest) {
     const productsCount = data.products.edges.length;
     const customersCount = data.customers.edges.length;
 
-    // Calculate metrics from Shopify data
+
     const ordersCount = orders.length;
     const gmv = orders.reduce((sum: number, order: any) => {
       return sum + parseFloat(order.totalPriceSet?.shopMoney?.amount || '0');
     }, 0);
     const aov = ordersCount > 0 ? gmv / ordersCount : 0;
 
-    // Calculate fulfillment rate
+
     const fulfilledOrders = orders.filter((o: any) => o.displayFulfillmentStatus === 'FULFILLED').length;
     const fulfillmentRate = ordersCount > 0 ? (fulfilledOrders / ordersCount) * 100 : 0;
 
-    // Estimate checkout metrics (since we don't have direct access to abandoned checkouts in basic GraphQL)
-    const estimatedCheckouts = Math.round(ordersCount * 2.5); // Typical e-commerce conversion rate
+
+    const estimatedCheckouts = Math.round(ordersCount * 2.5);
     const checkoutConversion = ordersCount > 0 ? (ordersCount / estimatedCheckouts) * 100 : 0;
     
-    // Estimate cart metrics
-    const estimatedCarts = Math.round(ordersCount * 3); // Cart abandonment typical ratio
-    const totalCartValue = gmv * 1.4; // Estimated cart value higher than completed orders
+
+    const estimatedCarts = Math.round(ordersCount * 3); 
+    const totalCartValue = gmv * 1.4; 
 
     return NextResponse.json({
       shop,
