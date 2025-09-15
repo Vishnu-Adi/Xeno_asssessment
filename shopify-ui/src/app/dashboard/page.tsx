@@ -111,6 +111,20 @@ function DashboardInner() {
     refetchInterval: 60000,
   });
 
+  const nvr = useQuery<{ shop:string; window:{start:string;end:string}; breakdown: { new:{count:number;revenue:number;pct:number}; returning:{count:number;revenue:number;pct:number} } }>({
+    queryKey: ["new-vs-returning", shop, range.start, range.end],
+    queryFn: async () => (await fetch(`/api/analytics/new-vs-returning?shop=${shop}&startDate=${range.start}&endDate=${range.end}`)).json(),
+    enabled: !!session && !!shop,
+    refetchInterval: 60000,
+  });
+
+  const sla = useQuery<{ shop:string; window:{start:string;end:string}; statusSplit: {status:string;count:number;pct:number}[]; medianSlaHours:number }>({
+    queryKey: ["fulfillment-sla", shop, range.start, range.end],
+    queryFn: async () => (await fetch(`/api/analytics/fulfillment-sla?shop=${shop}&startDate=${range.start}&endDate=${range.end}`)).json(),
+    enabled: !!session && !!shop,
+    refetchInterval: 60000,
+  });
+
   useEffect(() => {
     if (!session && status !== "loading") {
       router.push("/auth/signin");
@@ -209,6 +223,41 @@ function DashboardInner() {
                 <Line yAxisId="revenue" type="monotone" dataKey="avgOrderValue" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Small insights row */}
+          <div className="grid gap-4 mt-6 md:grid-cols-2">
+            <div className="rounded-xl p-4 bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">New vs Returning</div>
+                <div className="text-xs text-gray-500">{range.start} → {range.end}</div>
+              </div>
+              <div className="flex items-end gap-2 h-20">
+                <div className="flex-1">
+                  <div className="h-16 bg-emerald-600/30 border border-emerald-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown.new.pct ?? 0)) * 0.6}px` }}></div>
+                  <div className="text-xs text-gray-400 mt-1">New ({nvr.data?.breakdown.new.count ?? 0})</div>
+                </div>
+                <div className="flex-1">
+                  <div className="h-16 bg-blue-600/30 border border-blue-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown.returning.pct ?? 0)) * 0.6}px` }}></div>
+                  <div className="text-xs text-gray-400 mt-1">Returning ({nvr.data?.breakdown.returning.count ?? 0})</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl p-4 bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Fulfillment</div>
+                <div className="text-xs text-gray-500">Median SLA: {Math.round((sla.data?.medianSlaHours ?? 0)*10)/10}h</div>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-300">
+                {(sla.data?.statusSplit ?? []).slice(0,3).map((s: any) => (
+                  <div key={s.status} className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full" style={{backgroundColor: s.status === 'FULFILLED' ? '#10b981' : s.status === 'UNFULFILLED' ? '#f59e0b' : '#64748b'}}></span>
+                    <span>{s.status.toLowerCase()}</span>
+                    <span className="text-gray-500">{s.pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
