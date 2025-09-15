@@ -148,9 +148,9 @@ function DashboardInner() {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/60 backdrop-blur">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 bg-white rounded-lg flex items-center justify-center"><span className="text-black font-bold">X</span></div>
+            <div className="h-9 w-9 bg-white rounded-lg flex items-center justify-center"><span className="text-black font-bold">S</span></div>
             <div>
-              <div className="font-semibold">Xeno Analytics</div>
+              <div className="font-semibold">ShopFlow Analytics</div>
               <div className="text-xs text-gray-400">Shopify Insights Dashboard</div>
             </div>
           </div>

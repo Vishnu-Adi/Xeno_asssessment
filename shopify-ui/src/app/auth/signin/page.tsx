@@ -69,9 +69,9 @@ export default function SignIn() {
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
-              <span className="text-black font-bold">X</span>
+              <span className="text-black font-bold">S</span>
             </div>
-            <span className="font-semibold">Xeno Analytics</span>
+            <span className="font-semibold">ShopFlow Analytics</span>
           </Link>
           <Link
             href="/"
@@ -90,7 +90,7 @@ export default function SignIn() {
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> secure sign-in
             </div>
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-gray-400 mt-2">Sign in to access your dashboard</p>
+            <p className="text-gray-400 mt-2">Sign in to access your ShopFlow Analytics dashboard</p>
           </div>
 
           <div className="glass rounded-2xl p-6">
@@ -209,6 +209,17 @@ export default function SignIn() {
 
           <div className="text-center mt-6">
             <Link href="/" className="text-gray-400 hover:text-white text-sm">← Back to home</Link>
+          </div>
+
+          {/* Demo User Details */}
+          <div className="glass rounded-xl p-4 mt-6 border border-emerald-500/20">
+            <div className="text-center">
+              <h3 className="text-emerald-300 font-semibold text-sm mb-2">Demo Account</h3>
+              <div className="space-y-1 text-sm text-gray-300">
+                <p><span className="text-gray-400">Email:</span> demo@example.com</p>
+                <p><span className="text-gray-400">Password:</span> demo123</p>
+              </div>
+            </div>
           </div>
         </div>
       </main>

@@ -13,9 +13,9 @@ export default function Home() {
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
-              <span className="text-black font-bold">X</span>
+              <span className="text-black font-bold">S</span>
             </div>
-            <span className="font-semibold">Xeno Analytics</span>
+            <span className="font-semibold">ShopFlow Analytics</span>
           </Link>
 
           <div className="flex items-center gap-4">
@@ -46,7 +46,7 @@ export default function Home() {
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-gray-400">
-            Multi-tenant analytics for two dev stores. MySQL + Prisma, serverless APIs, and a premium dashboard UI.
+            ShopFlow Analytics: Multi-tenant insights for two dev stores. MySQL + Prisma, serverless APIs, and a premium dashboard UI.
           </p>
 
           <div className="mt-10 flex items-center justify-center">
