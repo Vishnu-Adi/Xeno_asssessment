@@ -1,0 +1,9 @@
+{
+  "/api/analytics/fulfillment-sla/route": "app/api/analytics/fulfillment-sla/route.js",
+  "/api/analytics/new-vs-returning/route": "app/api/analytics/new-vs-returning/route.js",
+  "/api/analytics/orders-by-date/route": "app/api/analytics/orders-by-date/route.js",
+  "/api/analytics/overview/route": "app/api/analytics/overview/route.js",
+  "/api/analytics/top-customers/route": "app/api/analytics/top-customers/route.js",
+  "/api/orders/list/route": "app/api/orders/list/route.js",
+  "/api/products/recent/route": "app/api/products/recent/route.js"
+}

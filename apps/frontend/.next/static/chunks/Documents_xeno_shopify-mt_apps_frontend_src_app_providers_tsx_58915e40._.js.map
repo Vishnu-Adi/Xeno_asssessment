@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/vishnuadithya/Documents/xeno/shopify-mt/apps/frontend/src/app/providers.tsx"],"sourcesContent":["'use client'\n\nimport { QueryClient, QueryClientProvider } from '@tanstack/react-query'\nimport { SessionProvider } from 'next-auth/react'\nimport { useState } from 'react'\n\nexport function Providers({ children }: { children: React.ReactNode }) {\n  const [queryClient] = useState(() => new QueryClient())\n  \n  return (\n    <SessionProvider>\n      <QueryClientProvider client={queryClient}>\n        {children}\n      </QueryClientProvider>\n    </SessionProvider>\n  )\n}\n"],"names":[],"mappings":";;;;;AAEA;AAAA;AACA;AACA;;;AAJA;;;;AAMO,SAAS,UAAU,KAA2C;QAA3C,EAAE,QAAQ,EAAiC,GAA3C;;IACxB,MAAM,CAAC,YAAY,GAAG,IAAA,8UAAQ;8BAAC,IAAM,IAAI,8SAAW;;IAEpD,qBACE,kWAAC,4ZAAe;kBACd,cAAA,kWAAC,sVAAmB;YAAC,QAAQ;sBAC1B;;;;;;;;;;;AAIT;GAVgB;KAAA","debugId":null}}]
+}
