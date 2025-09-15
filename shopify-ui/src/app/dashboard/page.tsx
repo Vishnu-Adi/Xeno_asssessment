@@ -80,7 +80,7 @@ function DashboardInner() {
   const router = useRouter();
 
   const shop = sp.get("shop") ?? STORES[0];
-  const [range, setRange] = useState<{ start: string; end: string }>({ start: isoDaysAgo(29), end: isoDaysAgo(0) });
+  const [range, setRange] = useState<{ start: string; end: string }>({ start: isoDaysAgo(6), end: isoDaysAgo(0) });
 
   // Shopify-powered APIs
   const overview = useQuery<Overview>({
