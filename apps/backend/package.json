@@ -1,11 +1,11 @@
 {
-  "name": "shopify-ui",
+  "name": "backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "PORT=3001 next dev --turbopack",
     "build": "next build --turbopack",
-    "start": "next start",
+    "start": "PORT=3001 next start",
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
