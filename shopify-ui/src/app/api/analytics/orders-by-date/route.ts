@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     const end = searchParams.get("endDate") ?? toISODate(new Date());
     const start = searchParams.get("startDate") ?? 
       toISODate(new Date(Date.now() - 30 * 86400000));
+    const demoDays = Number(searchParams.get("demoDays") ?? 0);
 
     const ordersQuery = `created_at:>=${start} created_at:<=${end}`;
 
@@ -75,6 +76,11 @@ export async function GET(req: NextRequest) {
       const data = buckets.get(key) ?? { 
         date: key, orders: 0, revenue: 0, avgOrderValue: 0, checkouts: 0, carts: 0
       };
+      // Optionally shift dates for demo purposes only
+      if (demoDays > 0) {
+        const shifted = new Date(d.getTime() - demoDays * 86400000);
+        data.date = toISODate(shifted);
+      }
       
       // Calculate metrics
       data.avgOrderValue = data.orders > 0 ? Math.round((data.revenue / data.orders) * 100) / 100 : 0;

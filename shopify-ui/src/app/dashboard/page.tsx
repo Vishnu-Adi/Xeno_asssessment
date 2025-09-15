@@ -99,7 +99,7 @@ function DashboardInner() {
 
   const topCustomers = useQuery<TopCustomers>({
     queryKey: ["top-customers", shop, range.start, range.end],
-    queryFn: async () => (await fetch(`/api/analytics/top-customers?shop=${shop}&startDate=${range.start}&endDate=${range.end}&limit=10`)).json(),
+    queryFn: async () => (await fetch(`/api/analytics/top-customers?shop=${shop}&startDate=${range.start}&endDate=${range.end}&limit=20`)).json(),
     enabled: !!session && !!shop,
     refetchInterval: 60000,
   });
@@ -140,6 +140,7 @@ function DashboardInner() {
   const series = ordersSeries.data?.series ?? [];
   const customers = topCustomers.data?.top ?? [];
   const products = recentProducts.data?.items ?? [];
+  const showCount = Math.max(5, Math.min(8, products.length));
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -248,15 +249,40 @@ function DashboardInner() {
                 <div className="text-sm font-medium">Fulfillment</div>
                 <div className="text-xs text-gray-500">Median SLA: {Math.round((sla.data?.medianSlaHours ?? 0)*10)/10}h</div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-gray-300">
-                {(sla.data?.statusSplit ?? []).slice(0,3).map((s: any) => (
-                  <div key={s.status} className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{backgroundColor: s.status === 'FULFILLED' ? '#10b981' : s.status === 'UNFULFILLED' ? '#f59e0b' : '#64748b'}}></span>
-                    <span>{s.status.toLowerCase()}</span>
-                    <span className="text-gray-500">{s.pct}%</span>
+              {(() => {
+                const split = sla.data?.statusSplit ?? [];
+                const by = Object.fromEntries(split.map((s:any)=> [s.status, s.pct]));
+                const f = by['FULFILLED'] ?? 0;
+                const u = by['UNFULFILLED'] ?? 0;
+                const p = by['PARTIALLY_FULFILLED'] ?? 0;
+                const other = Math.max(0, 100 - (f+u+p));
+                const segs = [
+                  { label: 'fulfilled', pct: f, color: '#10b981' },
+                  { label: 'partial', pct: p, color: '#38bdf8' },
+                  { label: 'unfulfilled', pct: u, color: '#f59e0b' },
+                  { label: 'other', pct: other, color: '#6b7280' },
+                ].filter(s=>s.pct>0.1);
+                return (
+                  <div>
+                    <div className="w-full h-3 rounded-full bg-black/40 border border-white/10 overflow-hidden">
+                      <div className="flex h-full w-full">
+                        {segs.map((s)=> (
+                          <div key={s.label} style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-gray-300">
+                      {segs.map((s)=> (
+                        <div key={s.label} className="flex items-center gap-1">
+                          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>
+                          <span>{s.label}</span>
+                          <span className="text-gray-500">{Math.round(s.pct)}%</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           </div>
         </section>
@@ -298,7 +324,7 @@ function DashboardInner() {
               <h3 className="text-lg font-semibold">Top customers</h3>
             </div>
             <div className="space-y-3">
-              {customers.slice(0, 5).map((c) => (
+              {customers.slice(0, showCount).map((c) => (
                 <div key={c.customerId} className="flex items-center justify-between rounded-lg bg-black/30 px-4 py-3 border border-white/10">
                   <div>
                     <div className="font-medium">{c.fullName}</div>
@@ -319,6 +345,15 @@ function DashboardInner() {
             </div>
           </div>
         </section>
+
+        {/* Recent Orders table */}
+        <section className="rounded-2xl p-6 bg-white/5 border border-white/10">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Recent orders</h3>
+            <div className="text-sm text-gray-400">{range.start} → {range.end}</div>
+          </div>
+          <OrdersTable shop={shop} start={range.start} end={range.end} />
+        </section>
       </main>
     </div>
   );
@@ -330,4 +365,72 @@ export default function Dashboard() {
       <DashboardInner />
     </Suspense>
   );
+}
+
+function OrdersTable({ shop, start, end }: { shop:string; start:string; end:string }){
+  const [q, setQ] = useState("")
+  const [status, setStatus] = useState("all")
+  const [after, setAfter] = useState<string | undefined>(undefined)
+  const [sort, setSort] = useState<'asc'|'desc'>('desc')
+  const pageSize = 10
+
+  const list = useQuery<{ shop:string; window:{start:string;end:string}; pageInfo:{hasNextPage:boolean;endCursor?:string}; items:any[] }>({
+    queryKey: ['orders-list', shop, start, end, q, status, after, sort],
+    queryFn: async () => (await fetch(`/api/orders/list?shop=${shop}&startDate=${start}&endDate=${end}&q=${encodeURIComponent(q)}&status=${status}&after=${after ?? ''}&sort=${sort}&limit=${pageSize}`)).json(),
+  })
+
+  const items = list.data?.items ?? []
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search email or order id" className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm" />
+        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm">
+          <option value="all">All</option>
+          <option value="fulfilled">Fulfilled</option>
+          <option value="unfulfilled">Unfulfilled</option>
+          <option value="partial">Partial</option>
+        </select>
+        <select value={sort} onChange={(e)=>setSort(e.target.value as any)} className="bg-black/40 border border-white/10 rounded px-2 py-1 text-sm">
+          <option value="desc">Newest</option>
+          <option value="asc">Oldest</option>
+        </select>
+        <Button size="sm" variant="outline" className="border-white/10" onClick={()=>setAfter(undefined)}>Reset</Button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-gray-400">
+            <tr>
+              <th className="py-2">Date</th>
+              <th className="py-2">Order</th>
+              <th className="py-2">Customer</th>
+              <th className="py-2">Total</th>
+              <th className="py-2">Gateway</th>
+              <th className="py-2">Fulfillment</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {items.map((o:any)=> (
+              <tr key={o.id} className="hover:bg-white/5">
+                <td className="py-2 text-gray-300">{new Date(o.createdAt).toLocaleString()}</td>
+                <td className="py-2">{o.name}</td>
+                <td className="py-2">{o.customer.name}<div className="text-xs text-gray-500">{o.customer.email}</div></td>
+                <td className="py-2">{fmtINR(o.total)}</td>
+                <td className="py-2 text-gray-300">{(o.gateways||[]).join(', ') || '—'}</td>
+                <td className="py-2 text-gray-300">{o.fulfillment.toLowerCase()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <div>{items.length} rows</div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="border-white/10" disabled={!list.data?.pageInfo?.endCursor} onClick={()=>setAfter(list.data?.pageInfo?.endCursor)}>Next</Button>
+        </div>
+      </div>
+    </div>
+  )
 }
