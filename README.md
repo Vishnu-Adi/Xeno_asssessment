@@ -111,7 +111,7 @@ Add screenshots to the `public/` folder and reference them here.
 
 ## Architecture Diagram
 
-![Architecture Diagram](public/Untitled%20Diagram.jpg)
+![Architecture Diagram](shopify-ui/public/Untitled%20Diagram.jpg)
 
 The architecture consists of the Next.js frontend (browser-based React app), Next.js API routes (serverless functions on Vercel) for analytics and admin operations, a MySQL database via Prisma, and Shopify’s external services (Admin API, Storefront API, and Webhooks).
 
