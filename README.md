@@ -103,12 +103,6 @@ Deployed on Vercel (recommended). Append `?shop=<shop-domain>` to the dashboard 
 
 ---
 
-## Screenshots
-
-Add screenshots to the `public/` folder and reference them here.
-
----
-
 ## Architecture Diagram
 
 ![Architecture Diagram](shopify-ui/public/Untitled%20Diagram.jpg)
