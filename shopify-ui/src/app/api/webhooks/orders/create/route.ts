@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const payload = JSON.parse(rawBody);
   const tenantId = await resolveTenantIdFromShopDomain(shop);
 
-  // Idempotency via INSERT IGNORE
+
   const inserted = await prisma.$executeRawUnsafe(
     'INSERT IGNORE INTO `WebhookEvent` (`tenantId`, `eventId`, `receivedAt`) VALUES (?, ?, NOW(6))',
     tenantId, eventId

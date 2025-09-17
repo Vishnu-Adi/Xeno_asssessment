@@ -10,15 +10,15 @@ function envTokenForShop(shop: string): string | undefined {
 export async function adminFetch(shop: string, query: string, variables?: any) {
   let token: string | undefined
 
-  // Try DB first, but tolerate DB outages and fall back to env
+  // Try DB first
   try {
     const prisma = getPrisma()
     const store = await prisma.store.findFirst({ where: { shopDomain: shop } })
     token = store?.accessToken
   } catch (_e) {
-    // ignore and try env
+    //Ignore erros
   }
-
+  //Try env
   if (!token) token = envTokenForShop(shop)
   if (!token) throw new Error(`Missing access token for store ${shop}. Provide in DB or env (SHOPIFY_TOKEN_${shop.toUpperCase().replace(/[^A-Z0-9]/g, '_')} or SHOPIFY_ACCESS_TOKEN).`)
 

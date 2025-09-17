@@ -6,7 +6,7 @@ declare global {
 }
 
 export function getPrisma(): PrismaClient {
-  // Ensure env parsed (side-effect to validate early)
+
   getEnv();
   if (global.prisma) return global.prisma;
   const client = new PrismaClient({

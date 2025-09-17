@@ -8,7 +8,7 @@ const envSchema = z.object({
   SHOPIFY_SCOPES: z.string().min(1),
   SHOPIFY_APP_URL: z.string().url(),
   SHOPIFY_REDIRECT_PATH: z.string().default('/api/oauth/callback'),
-  // Email configuration (optional for development)
+
   EMAIL_SERVER_HOST: z.string().optional(),
   EMAIL_SERVER_PORT: z.string().optional(),
   EMAIL_SERVER_USER: z.string().optional(),

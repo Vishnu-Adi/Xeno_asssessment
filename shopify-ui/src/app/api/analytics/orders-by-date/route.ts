@@ -76,17 +76,12 @@ export async function GET(req: NextRequest) {
       const data = buckets.get(key) ?? { 
         date: key, orders: 0, revenue: 0, avgOrderValue: 0, checkouts: 0, carts: 0
       };
-      // Optionally shift dates for demo purposes only
-      if (demoDays > 0) {
-        const shifted = new Date(d.getTime() - demoDays * 86400000);
-        data.date = toISODate(shifted);
-      }
-      
+ 
       // Calculate metrics
       data.avgOrderValue = data.orders > 0 ? Math.round((data.revenue / data.orders) * 100) / 100 : 0;
       data.revenue = Math.round(data.revenue * 100) / 100;
       
-      // Estimate checkouts and carts based on industry standards
+
       data.checkouts = Math.round(data.orders * 2.5); // 40% checkout conversion
       data.carts = Math.round(data.orders * 3.5); // 29% cart conversion
       

@@ -7,7 +7,6 @@ import bcrypt from 'bcryptjs'
 
 const prisma = getPrisma()
 
-// Check if email configuration is available
 const isEmailConfigured = process.env.EMAIL_SERVER_HOST && 
   process.env.EMAIL_SERVER_PORT && 
   process.env.EMAIL_SERVER_USER && 
@@ -18,7 +17,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   secret: process.env.NEXTAUTH_SECRET || 'fallback-secret-for-development',
   providers: [
-    // Only add EmailProvider if email is properly configured
+
     ...(isEmailConfigured ? [EmailProvider({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
