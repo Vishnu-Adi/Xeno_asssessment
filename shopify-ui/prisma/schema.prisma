@@ -152,6 +152,7 @@ model User {
   email         String       @unique
   emailVerified DateTime?
   image         String?
+  passwordHash  String?      @db.VarChar(255)
   accounts      Account[]
   sessions      Session[]
   tenantUsers   TenantUser[]

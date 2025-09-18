@@ -16,13 +16,12 @@ export async function POST(req: NextRequest) {
   const tenantId = await resolveTenantIdFromShopDomain(shop)
   
   try {
-    // Delete analytics data for this tenant
+    
     const deleteResults = await Promise.allSettled([
       prisma.cart.deleteMany({ where: { tenantId } }),
       prisma.checkout.deleteMany({ where: { tenantId } }),
       prisma.order.deleteMany({ where: { tenantId } }),
       prisma.customer.deleteMany({ where: { tenantId } }),
-      // Keep products as they're from Shopify
     ])
 
     const deletedCounts = {

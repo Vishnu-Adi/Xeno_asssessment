@@ -14,7 +14,7 @@ const isEmailConfigured = process.env.EMAIL_SERVER_HOST &&
   process.env.EMAIL_FROM
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET || 'fallback-secret-for-development',
   providers: [
 
@@ -40,52 +40,35 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // For demo purposes, allow specific demo credentials
-        if (credentials.email === 'demo@example.com' && credentials.password === 'demo123') {
-          // Try to find or create demo user
-          let user = await prisma.user.findUnique({
-            where: { email: 'demo@example.com' }
-          }).catch(() => null)
+        const email = credentials.email.trim().toLowerCase()
+        const plainPassword = credentials.password
 
-          if (!user) {
-            // Create demo user if it doesn't exist
-            try {
-              user = await prisma.user.create({
-                data: {
-                  email: 'demo@example.com',
-                  name: 'Demo User'
-                }
-              })
-            } catch (error) {
-              console.error('Failed to create demo user:', error)
-              // Return a temporary user object for demo purposes
-              return {
-                id: 'demo-user-id',
-                email: 'demo@example.com',
-                name: 'Demo User'
-              }
-            }
-          }
+        if (email === 'demo@example.com' && plainPassword === 'demo123') {
+          const demoUser = await prisma.user.upsert({
+            where: { email },
+            update: {},
+            create: {
+              email,
+              name: 'Demo User',
+            },
+          })
 
           return {
-            id: user.id,
-            email: user.email,
-            name: user.name || 'Demo User',
+            id: demoUser.id,
+            email: demoUser.email,
+            name: demoUser.name || 'Demo User',
           }
         }
 
-        // For other credentials, check database
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
-        }).catch(() => null)
+          where: { email },
+        })
 
-        if (!user) {
+        if (!user?.passwordHash) {
           return null
         }
 
-        // For simplicity, accept any password that matches 'demo123'
-        const isPasswordValid = credentials.password === 'demo123'
-
+        const isPasswordValid = await bcrypt.compare(plainPassword, user.passwordHash)
         if (!isPasswordValid) {
           return null
         }
@@ -93,7 +76,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           email: user.email,
-          name: user.name,
+          name: user.name ?? undefined,
         }
       }
     })

@@ -1,4 +1,4 @@
-// app/api/debug/orders-count/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'

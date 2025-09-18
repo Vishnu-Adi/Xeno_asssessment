@@ -99,7 +99,7 @@ function DashboardInner() {
 
   const topCustomers = useQuery<TopCustomers>({
     queryKey: ["top-customers", shop, range.start, range.end],
-    queryFn: async () => (await fetch(`/api/analytics/top-customers?shop=${shop}&startDate=${range.start}&endDate=${range.end}&limit=20`)).json(),
+    queryFn: async () => (await fetch(`/api/analytics/top-customers?shop=${shop}&startDate=${range.start}&endDate=${range.end}&limit=100`)).json(),
     enabled: !!session && !!shop,
     refetchInterval: 60000,
   });
@@ -141,7 +141,6 @@ function DashboardInner() {
   const customers = topCustomers.data?.top ?? [];
   const products = recentProducts.data?.items ?? [];
   const showCount = Math.max(5, Math.min(8, products.length));
-
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -354,6 +353,15 @@ function DashboardInner() {
           </div>
           <OrdersTable shop={shop} start={range.start} end={range.end} />
         </section>
+
+        {/* Customers table */}
+        <section className="rounded-2xl p-6 bg-white/5 border border-white/10">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Customer performance</h3>
+            <div className="text-sm text-gray-400">{range.start} → {range.end}</div>
+          </div>
+          <CustomersTable customers={customers} isLoading={topCustomers.isLoading} />
+        </section>
       </main>
     </div>
   );
@@ -474,4 +482,84 @@ function OrdersTable({ shop, start, end }: { shop:string; start:string; end:stri
       </div>
     </div>
   )
+}
+
+function CustomersTable({ customers, isLoading }: { customers: TopCustomers["top"]; isLoading: boolean }) {
+  const pageSize = 10;
+  const [page, setPage] = React.useState(0);
+  const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [customers.length]);
+
+  const clampedPage = Math.min(page, totalPages - 1);
+  const start = clampedPage * pageSize;
+  const pageItems = customers.slice(start, start + pageSize);
+  const hasData = customers.length > 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        {isLoading && (
+          <div className="rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-gray-400 mb-4">
+            Loading customers…
+          </div>
+        )}
+        <table className="w-full text-sm">
+          <thead className="text-left text-gray-400">
+            <tr>
+              <th className="py-2">Customer</th>
+              <th className="py-2">Email</th>
+              <th className="py-2">Orders</th>
+              <th className="py-2">Total spend</th>
+              <th className="py-2">Avg order value</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {pageItems.map((c) => (
+              <tr key={c.customerId} className="hover:bg-white/5">
+                <td className="py-2 text-gray-200">{c.fullName}</td>
+                <td className="py-2 text-gray-400">{c.email || '—'}</td>
+                <td className="py-2 text-gray-300">{c.orderCount}</td>
+                <td className="py-2">{fmtINR(c.totalSpend)}</td>
+                <td className="py-2 text-gray-300">{fmtINR(c.avgOrderValue)}</td>
+              </tr>
+            ))}
+            {!hasData && !isLoading && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-gray-400">No customer data in this window.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <div>
+          Showing {pageItems.length} of {customers.length} customers
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/10"
+            disabled={clampedPage === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            Prev
+          </Button>
+          <span className="text-gray-400">Page {clampedPage + 1} / {totalPages}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/10"
+            disabled={clampedPage >= totalPages - 1}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }

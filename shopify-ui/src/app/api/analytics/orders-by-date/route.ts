@@ -1,5 +1,6 @@
-// src/app/api/analytics/orders-by-date/route.ts - Real Shopify API Integration
 import { NextRequest, NextResponse } from "next/server";
+import { getPrisma } from "@/lib/db";
+import { resolveTenantIdFromShopDomain } from "@/lib/tenant";
 import { adminFetch } from "@/lib/shopify-admin";
 
 export const runtime = "nodejs";
@@ -23,6 +24,17 @@ const ORDERS_BY_DATE_QUERY = `
   }
 `;
 
+type ShopifyOrdersByDateOrder = {
+  id: string;
+  createdAt: string;
+  totalPriceSet?: { shopMoney?: { amount?: string | null } | null } | null;
+  displayFulfillmentStatus?: string | null;
+};
+
+type ShopifyOrdersByDateResponse = {
+  orders: { edges: { node: ShopifyOrdersByDateOrder }[] };
+};
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -30,81 +42,142 @@ export async function GET(req: NextRequest) {
     if (!shop) return NextResponse.json({ error: "Missing shop" }, { status: 400 });
 
     const end = searchParams.get("endDate") ?? toISODate(new Date());
-    const start = searchParams.get("startDate") ?? 
-      toISODate(new Date(Date.now() - 30 * 86400000));
-    const demoDays = Number(searchParams.get("demoDays") ?? 0);
+    const start = searchParams.get("startDate") ?? toISODate(new Date(Date.now() - 30 * 86400000));
 
-    const ordersQuery = `created_at:>=${start} created_at:<=${end}`;
+    const prisma = getPrisma();
+    const tenantId = await resolveTenantIdFromShopDomain(shop);
+    const from = new Date(`${start}T00:00:00.000Z`);
+    const to = new Date(`${end}T23:59:59.999Z`);
 
-    // Fetch orders from Shopify Admin GraphQL
-    const data = await adminFetch(shop, ORDERS_BY_DATE_QUERY, {
-      ordersQuery,
-      first: 250
+    const [orders, checkouts, carts] = await Promise.all([
+      prisma.order.findMany({
+        where: { tenantId, createdAt: { gte: from, lte: to } },
+        select: { createdAt: true, totalPrice: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.checkout.findMany({ where: { tenantId, createdAt: { gte: from, lte: to } }, select: { createdAt: true } }),
+      prisma.cart.findMany({ where: { tenantId, createdAt: { gte: from, lte: to } }, select: { createdAt: true } }),
+    ]);
+
+    const buckets = new Map<string, { date: string; orders: number; revenue: number; checkouts: number; carts: number }>();
+
+    const pushToBucket = (key: string, updater: (bucket: { date: string; orders: number; revenue: number; checkouts: number; carts: number }) => void) => {
+      const current = buckets.get(key) ?? { date: key, orders: 0, revenue: 0, checkouts: 0, carts: 0 };
+      updater(current);
+      buckets.set(key, current);
+    };
+
+    orders.forEach((order: any) => {
+      const key = toISODate(order.createdAt);
+      pushToBucket(key, (bucket) => {
+        bucket.orders += 1;
+        bucket.revenue += Number(order.totalPrice);
+      });
     });
 
-    const orders = data.orders.edges.map((e: any) => e.node);
+    checkouts.forEach((checkout:any) => {
+      const key = toISODate(checkout.createdAt);
+      pushToBucket(key, (bucket) => {
+        bucket.checkouts += 1;
+      });
+    });
 
-    // Bucket orders by day
-    const buckets = new Map<string, { 
-      date: string; 
-      orders: number; 
-      revenue: number;
-      avgOrderValue: number;
-      checkouts: number;
-      carts: number;
-    }>();
+    carts.forEach((cart:any) => {
+      const key = toISODate(cart.createdAt);
+      pushToBucket(key, (bucket) => {
+        bucket.carts += 1;
+      });
+    });
 
-    // Process Shopify orders
-    for (const order of orders) {
-      const day = toISODate(new Date(order.createdAt));
-      const revenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || '0');
-      const existing = buckets.get(day) ?? { 
-        date: day, orders: 0, revenue: 0, avgOrderValue: 0, checkouts: 0, carts: 0
-      };
-      existing.orders += 1;
-      existing.revenue += revenue;
-      buckets.set(day, existing);
+    const series: { date: string; orders: number; revenue: number; avgOrderValue: number; checkouts: number; carts: number }[] = [];
+    for (let day = new Date(from); day <= to; day = new Date(day.getTime() + 86_400_000)) {
+      const key = toISODate(day);
+      const bucket = buckets.get(key) ?? { date: key, orders: 0, revenue: 0, checkouts: 0, carts: 0 };
+      const avg = bucket.orders > 0 ? Math.round((bucket.revenue / bucket.orders) * 100) / 100 : 0;
+      series.push({
+        date: key,
+        orders: bucket.orders,
+        revenue: Math.round(bucket.revenue * 100) / 100,
+        avgOrderValue: avg,
+        checkouts: bucket.checkouts,
+        carts: bucket.carts,
+      });
     }
 
-    // Fill missing days and calculate metrics
-    const out: any[] = [];
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    
-    for (let d = new Date(startDate); d <= endDate; d = new Date(d.getTime() + 86400000)) {
-      const key = toISODate(d);
-      const data = buckets.get(key) ?? { 
-        date: key, orders: 0, revenue: 0, avgOrderValue: 0, checkouts: 0, carts: 0
-      };
- 
-      // Calculate metrics
-      data.avgOrderValue = data.orders > 0 ? Math.round((data.revenue / data.orders) * 100) / 100 : 0;
-      data.revenue = Math.round(data.revenue * 100) / 100;
-      
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum:any, order:any) => sum + Number(order.totalPrice), 0);
 
-      data.checkouts = Math.round(data.orders * 2.5); // 40% checkout conversion
-      data.carts = Math.round(data.orders * 3.5); // 29% cart conversion
-      
-      out.push(data);
+    if (totalOrders === 0 && checkouts.length === 0 && carts.length === 0) {
+      return NextResponse.json(await fetchShopifySeries(shop, start, end));
     }
 
-    const totalRevenue = orders.reduce((sum: number, order: any) => {
-      return sum + parseFloat(order.totalPriceSet?.shopMoney?.amount || '0');
-    }, 0);
-
-    return NextResponse.json({ 
-      shop, 
-      window: { start, end }, 
-      series: out,
+    return NextResponse.json({
+      shop,
+      window: { start, end },
+      series,
       summary: {
-        totalOrders: orders.length,
+        totalOrders,
         totalRevenue: Math.round(totalRevenue * 100) / 100,
-        totalCheckouts: Math.round(orders.length * 2.5),
-        totalCarts: Math.round(orders.length * 3.5),
-      }
+        totalCheckouts: checkouts.length,
+        totalCarts: carts.length,
+      },
     });
-  } catch (err: any) {
-    console.error('Shopify Orders by date error:', err);
-    return NextResponse.json({ error: err.message ?? "Unknown error" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Orders-by-date analytics error", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function fetchShopifySeries(shop: string, start: string, end: string) {
+  const ordersQuery = `created_at:>=${start} created_at:<=${end}`;
+  const data = await adminFetch<ShopifyOrdersByDateResponse>(shop, ORDERS_BY_DATE_QUERY, {
+    ordersQuery,
+    first: 250,
+  });
+  const orders = data.orders.edges.map((edge) => edge.node);
+
+  const buckets = new Map<string, { date: string; orders: number; revenue: number }>();
+  orders.forEach((order) => {
+    const key = toISODate(new Date(order.createdAt));
+    const revenue = parseFloat(order.totalPriceSet?.shopMoney?.amount || "0");
+    const bucket = buckets.get(key) ?? { date: key, orders: 0, revenue: 0 };
+    bucket.orders += 1;
+    bucket.revenue += revenue;
+    buckets.set(key, bucket);
+  });
+
+  const series: { date: string; orders: number; revenue: number; avgOrderValue: number; checkouts: number; carts: number }[] = [];
+  const from = new Date(`${start}T00:00:00.000Z`);
+  const to = new Date(`${end}T23:59:59.999Z`);
+  for (let day = new Date(from); day <= to; day = new Date(day.getTime() + 86_400_000)) {
+    const key = toISODate(day);
+    const bucket = buckets.get(key) ?? { date: key, orders: 0, revenue: 0 };
+    const avg = bucket.orders > 0 ? Math.round((bucket.revenue / bucket.orders) * 100) / 100 : 0;
+    series.push({
+      date: key,
+      orders: bucket.orders,
+      revenue: Math.round(bucket.revenue * 100) / 100,
+      avgOrderValue: avg,
+      checkouts: Math.round(bucket.orders * 2.5),
+      carts: Math.round(bucket.orders * 3.5),
+    });
+  }
+
+  const totalRevenue = orders.reduce(
+    (sum: number, order) => sum + parseFloat(order.totalPriceSet?.shopMoney?.amount || "0"),
+    0
+  );
+
+  return {
+    shop,
+    window: { start, end },
+    series,
+    summary: {
+      totalOrders: orders.length,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalCheckouts: Math.round(orders.length * 2.5),
+      totalCarts: Math.round(orders.length * 3.5),
+    },
+  };
 }

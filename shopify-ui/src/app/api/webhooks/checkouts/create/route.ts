@@ -4,7 +4,7 @@ import crypto from 'crypto'
 import { getEnv } from '@/lib/env'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
-import { Prisma } from '@prisma/client'
+const { Prisma } = require('@prisma/client');
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {

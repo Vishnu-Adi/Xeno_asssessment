@@ -1,6 +1,16 @@
-import { Customer, PrismaClient, Prisma } from '@prisma/client';
 import { getPrisma } from '@/lib/db';
 import { TenantScope } from '@/lib/tenant';
+
+type Customer = {
+  id: string;
+  tenantId: string;
+  shopifyCustomerId: bigint;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 export async function listCustomers(scope: TenantScope, params: { from?: Date; to?: Date; limit?: number; cursor?: string }) {
   const prisma = getPrisma();
@@ -24,7 +34,7 @@ export async function listCustomers(scope: TenantScope, params: { from?: Date; t
 export async function upsertFromShopify(
   scope: TenantScope,
   payload: { id: string; email?: string; first_name?: string; last_name?: string; created_at?: string },
-  client?: PrismaClient | Prisma.TransactionClient
+  client?: any
 ): Promise<Customer> {
   const prisma = (client ?? getPrisma());
   return prisma.customer.upsert({

@@ -84,7 +84,12 @@ export async function GET(req: NextRequest) {
     if (after && after !== 'undefined' && after !== 'null' && after.trim() !== '') {
       vars.after = after;
     }
-    const data = await adminFetch(shop, ORDERS_LIST_Q, vars);
+    const data = await adminFetch(shop, ORDERS_LIST_Q, vars) as {
+      orders: {
+        edges: Array<{ node: any }>;
+        pageInfo: { hasNextPage: boolean; endCursor?: string };
+      };
+    };
 
     const edges = data.orders.edges || [];
     const items = edges.map((e: any) => e.node).map((o: any) => ({
@@ -104,7 +109,8 @@ export async function GET(req: NextRequest) {
       pageInfo: data.orders.pageInfo,
       items,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

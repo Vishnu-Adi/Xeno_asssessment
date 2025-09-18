@@ -1,12 +1,13 @@
-import { PrismaClient } from '@prisma/client';
 import { getEnv } from './env';
 
+
+const { PrismaClient } = require('@prisma/client');
+
 declare global {
-  var prisma: PrismaClient | undefined;
+  var prisma: any | undefined;
 }
 
-export function getPrisma(): PrismaClient {
-
+export function getPrisma(): any {
   getEnv();
   if (global.prisma) return global.prisma;
   const client = new PrismaClient({
