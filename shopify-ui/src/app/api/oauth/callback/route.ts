@@ -1,12 +1,11 @@
-// src/app/api/oauth/callback/route.ts
-// UPDATED FOR SHOPIFY API MIGRATION COMPLIANCE - Using 2024-10 API version
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnv } from '@/lib/env'
 import { getPrisma } from '@/lib/db'
 import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 import { checkMigrationCompliance } from '@/lib/shopify-api-migration'
 
-export const runtime = 'nodejs' // ✅ Next 15 expects 'nodejs' or 'edge'
+export const runtime = 'nodejs' 
 
 export async function GET(req: NextRequest) {
   const env = getEnv()

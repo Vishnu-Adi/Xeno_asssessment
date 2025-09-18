@@ -32,7 +32,26 @@ export async function POST(req: NextRequest) {
     const query = `
       query Orders($first: Int!, $after: String) {
         orders(first: $first, after: $after, sortKey: CREATED_AT) {
-          edges { node { id createdAt totalPriceSet { shopMoney { amount currencyCode } } presentmentCurrencyCode financialStatus customer { id } } cursor }
+          edges { 
+            node { 
+              id 
+              legacyResourceId
+              createdAt 
+              totalPriceSet { 
+                shopMoney { 
+                  amount 
+                  currencyCode 
+                } 
+              } 
+              currencyCode
+              displayFinancialStatus
+              customer { 
+                id 
+                legacyResourceId
+              } 
+            } 
+            cursor 
+          }
           pageInfo { hasNextPage endCursor }
         }
       }
@@ -42,24 +61,42 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken! },
       body: JSON.stringify({ query, variables: { first: Math.min(100, Number(first)), after: cursor } })
     })
-    if (!res.ok) return NextResponse.json({ error: 'admin_graphql_error', status: res.status, text: await res.text() }, { status: 502 })
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error(`GraphQL error ${res.status}:`, errorText)
+      return NextResponse.json({ error: 'admin_graphql_error', status: res.status, text: errorText }, { status: 502 })
+    }
+    
     const json = await res.json()
+    console.log(`Fetched ${json?.data?.orders?.edges?.length || 0} orders, hasNextPage: ${json?.data?.orders?.pageInfo?.hasNextPage}`)
+    
+    if (json.errors) {
+      console.error('GraphQL errors:', json.errors)
+      return NextResponse.json({ error: 'graphql_errors', errors: json.errors }, { status: 400 })
+    }
+    
     const edges = json?.data?.orders?.edges ?? []
     for (const edge of edges) {
-      const o = edge.node
-      const id = String(o.id).split('/').pop()
-      const customerId = o.customer?.id ? String(o.customer.id).split('/').pop() : undefined
-      const payload = {
-        id,
-        created_at: o.createdAt,
-        current_total_price: o.totalPriceSet?.shopMoney?.amount ?? undefined,
-        currency: o.totalPriceSet?.shopMoney?.currencyCode ?? o.presentmentCurrencyCode ?? 'USD',
-        presentment_currency: o.presentmentCurrencyCode ?? undefined,
-        financial_status: (o.financialStatus || '').toLowerCase(),
-        customer: customerId ? { id: customerId } : undefined,
+      try {
+        const o = edge.node
+        const id = o.legacyResourceId || String(o.id).split('/').pop()
+        const customerId = o.customer?.legacyResourceId || (o.customer?.id ? String(o.customer.id).split('/').pop() : undefined)
+        
+        const payload = {
+          id,
+          created_at: o.createdAt,
+          current_total_price: o.totalPriceSet?.shopMoney?.amount ?? undefined,
+          currency: o.totalPriceSet?.shopMoney?.currencyCode ?? o.currencyCode ?? 'USD',
+          financial_status: (o.displayFinancialStatus || '').toLowerCase(),
+          customer: customerId ? { id: customerId } : undefined,
+        }
+        
+        console.log(`Upserting order ${id} for tenant ${tenantId}`)
+        await OrdersRepo.upsertFromShopify({ tenantId }, payload as any)
+        upserts++
+      } catch (error) {
+        console.error('Error upserting order:', error)
       }
-      await OrdersRepo.upsertFromShopify({ tenantId }, payload as any)
-      upserts++
     }
     hasNextPage = Boolean(json?.data?.orders?.pageInfo?.hasNextPage)
     cursor = json?.data?.orders?.pageInfo?.endCursor ?? null

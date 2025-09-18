@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set('client_id', env.SHOPIFY_API_KEY);
   authUrl.searchParams.set('scope', env.SHOPIFY_SCOPES);
   authUrl.searchParams.set('redirect_uri', redirectUri);
-  // Optional: add state for CSRF; for brevity, omit persistence in this scaffold
+
   authUrl.searchParams.set('state', Math.random().toString(36).slice(2));
   return NextResponse.redirect(authUrl.toString());
 }

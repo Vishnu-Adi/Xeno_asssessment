@@ -3,7 +3,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import EmailProvider from 'next-auth/providers/email'
 import { getPrisma } from './db'
-import bcrypt from 'bcryptjs'
 
 const prisma = getPrisma()
 
@@ -40,43 +39,30 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const email = credentials.email.trim().toLowerCase()
-        const plainPassword = credentials.password
-
-        if (email === 'demo@example.com' && plainPassword === 'demo123') {
-          const demoUser = await prisma.user.upsert({
-            where: { email },
-            update: {},
-            create: {
-              email,
-              name: 'Demo User',
-            },
-          })
-
-          return {
-            id: demoUser.id,
-            email: demoUser.email,
-            name: demoUser.name || 'Demo User',
-          }
+        if (!credentials?.email || !credentials?.password) {
+          return null
         }
 
-        const user = await prisma.user.findUnique({
+        const email = credentials.email.trim().toLowerCase()
+        const password = credentials.password
+
+        if (email !== 'demo@example.com' || password !== 'demo123') {
+          return null
+        }
+
+        const demoUser = await prisma.user.upsert({
           where: { email },
+          update: {},
+          create: {
+            email,
+            name: 'Demo User',
+          },
         })
 
-        if (!user?.passwordHash) {
-          return null
-        }
-
-        const isPasswordValid = await bcrypt.compare(plainPassword, user.passwordHash)
-        if (!isPasswordValid) {
-          return null
-        }
-
         return {
-          id: user.id,
-          email: user.email,
-          name: user.name ?? undefined,
+          id: demoUser.id,
+          email: demoUser.email,
+          name: demoUser.name || 'Demo User',
         }
       }
     })

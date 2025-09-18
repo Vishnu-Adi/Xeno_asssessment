@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
     // Get local customers for this tenant
     const customers = await prisma.customer.findMany({
       where: { tenantId },
-      select: { shopifyCustomerId: true, email: true, firstName: true, lastName: true }
+      select: { shopifyCustomerId: true, email: true, firstName: true, lastName: true },
+      take: 50
     })
 
     if (customers.length === 0) {
@@ -45,17 +46,18 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         query: `{
-          products(first: 50, query: "status:active") {
+          products(first: 10, query: "status:active") {
             edges {
               node {
                 id
                 title
-                variants(first: 25) {
+                variants(first: 5) {
                   edges {
                     node {
                       id
                       title
                       price
+                      availableForSale
                     }
                   }
                 }
@@ -67,34 +69,69 @@ export async function POST(req: NextRequest) {
     })
 
     if (!variantsResponse.ok) {
-      return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
+      const errorText = await variantsResponse.text()
+      console.error('Shopify API error:', errorText)
+      return NextResponse.json({ error: 'Failed to fetch products', details: errorText }, { status: 500 })
     }
 
     const variantsData = await variantsResponse.json()
+    console.log('Variants response:', JSON.stringify(variantsData, null, 2))
+    
+    if (variantsData.errors) {
+      console.error('GraphQL errors:', variantsData.errors)
+      return NextResponse.json({ error: 'GraphQL errors', details: variantsData.errors }, { status: 500 })
+    }
+
     const variants = variantsData.data?.products?.edges?.flatMap((product: any) => 
-      product.node.variants.edges.map((variant: any) => variant.node)
+      product.node.variants.edges
+        .filter((variant: any) => variant.node.availableForSale)
+        .map((variant: any) => variant.node)
     ) || []
 
     if (variants.length === 0) {
-      return NextResponse.json({ error: 'No product variants found' }, { status: 400 })
+      return NextResponse.json({ error: 'No available product variants found' }, { status: 400 })
     }
+
+    console.log(`Found ${variants.length} variants and ${customers.length} customers`)
 
     const createdOrders = []
     
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < Math.min(count, 10); i++) { // Limit to 10 for safety
       try {
         // Pick random customer and variants
         const customer = customers[Math.floor(Math.random() * customers.length)]
-        const numItems = Math.floor(Math.random() * 3) + 1 // 1-3 items
-        const selectedVariants = []
-        
-        for (let j = 0; j < numItems; j++) {
-          const variant = variants[Math.floor(Math.random() * variants.length)]
-          const quantity = Math.floor(Math.random() * 2) + 1 // 1-2 quantity
-          selectedVariants.push({ variantId: variant.id, quantity })
+        const variant = variants[Math.floor(Math.random() * variants.length)]
+        const quantity = Math.floor(Math.random() * 2) + 1 // 1-2 quantity
+
+        console.log(`Creating order ${i + 1} for customer ${customer.email} with variant ${variant.id}`)
+
+        // Create draft order with simpler structure
+        const draftMutation = `
+          mutation draftOrderCreate($input: DraftOrderInput!) {
+            draftOrderCreate(input: $input) {
+              draftOrder {
+                id
+                totalPrice
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `
+
+        const draftVariables = {
+          input: {
+            customerId: `gid://shopify/Customer/${customer.shopifyCustomerId}`,
+            lineItems: [{
+              variantId: variant.id,
+              quantity: quantity
+            }],
+            tags: ["seeded", "xeno"]
+          }
         }
 
-        // Create draft order
         const draftResponse = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
           method: 'POST',
           headers: {
@@ -102,137 +139,108 @@ export async function POST(req: NextRequest) {
             'X-Shopify-Access-Token': store.accessToken,
           },
           body: JSON.stringify({
-            query: `
-              mutation draftOrderCreate($input: DraftOrderInput!) {
-                draftOrderCreate(input: $input) {
-                  draftOrder {
-                    id
-                    invoiceUrl
-                    totalPrice
-                  }
-                  userErrors {
-                    field
-                    message
-                  }
-                }
-              }
-            `,
-            variables: {
-              input: {
-                email: customer.email,
-                lineItems: selectedVariants,
-                useCustomerDefaultAddress: true,
-                tags: ["seeded", "xeno", "realistic"],
-                customerId: customer.shopifyCustomerId
-              }
-            }
+            query: draftMutation,
+            variables: draftVariables
           })
         })
 
-        if (draftResponse.ok) {
-          const draftData = await draftResponse.json()
-          const draftOrder = draftData.data?.draftOrderCreate?.draftOrder
-          
-          if (draftOrder && !draftData.data?.draftOrderCreate?.userErrors?.length) {
-            // Complete the draft order to make it a real order
-            const completeResponse = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Shopify-Access-Token': store.accessToken,
-              },
-              body: JSON.stringify({
-                query: `
-                  mutation draftOrderComplete($id: ID!) {
-                    draftOrderComplete(id: $id) {
-                      draftOrder {
-                        id
-                        order {
-                          id
-                          name
-                          totalPriceSet {
-                            shopMoney {
-                              amount
-                              currencyCode
-                            }
-                          }
-                          createdAt
-                          customer {
-                            id
-                            email
-                          }
-                          lineItems(first: 10) {
-                            edges {
-                              node {
-                                id
-                                quantity
-                                variant {
-                                  id
-                                  product {
-                                    id
-                                    title
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                      userErrors {
-                        field
-                        message
-                      }
+        if (!draftResponse.ok) {
+          console.error(`Draft creation failed with status ${draftResponse.status}`)
+          continue
+        }
+
+        const draftData = await draftResponse.json()
+        console.log(`Draft response for order ${i + 1}:`, JSON.stringify(draftData, null, 2))
+        
+        if (draftData.errors) {
+          console.error('Draft GraphQL errors:', draftData.errors)
+          continue
+        }
+
+        const draftOrder = draftData.data?.draftOrderCreate?.draftOrder
+        const userErrors = draftData.data?.draftOrderCreate?.userErrors
+
+        if (userErrors && userErrors.length > 0) {
+          console.error('Draft user errors:', userErrors)
+          continue
+        }
+        
+        if (!draftOrder) {
+          console.error('No draft order created')
+          continue
+        }
+
+        // Complete the draft order
+        const completeMutation = `
+          mutation draftOrderComplete($id: ID!) {
+            draftOrderComplete(id: $id) {
+              draftOrder {
+                order {
+                  id
+                  name
+                  totalPriceSet {
+                    shopMoney {
+                      amount
+                      currencyCode
                     }
                   }
-                `,
-                variables: { id: draftOrder.id }
-              })
-            })
-
-            if (completeResponse.ok) {
-              const completeData = await completeResponse.json()
-              const order = completeData.data?.draftOrderComplete?.draftOrder?.order
-              
-              if (order) {
-                // Store order in local DB
-                await prisma.order.upsert({
-                  where: {
-                    tenantId_shopifyOrderId: {
-                      tenantId,
-                      shopifyOrderId: order.id
-                    }
-                  },
-                  update: {
-                    totalPrice: parseFloat(order.totalPriceSet.shopMoney.amount),
-                    status: 'fulfilled',
-                    updatedAt: new Date()
-                  },
-                  create: {
-                    tenantId,
-                    shopifyOrderId: order.id,
-                    totalPrice: parseFloat(order.totalPriceSet.shopMoney.amount),
-                    currency: order.totalPriceSet.shopMoney.currencyCode,
-                    status: 'fulfilled',
-                    customerShopifyId: order.customer?.id,
-                    createdAt: new Date(order.createdAt),
-                    updatedAt: new Date()
+                  createdAt
+                  customer {
+                    id
+                    email
                   }
-                })
-
-                createdOrders.push({
-                  shopifyOrderId: order.id,
-                  orderName: order.name,
-                  totalPrice: order.totalPriceSet.shopMoney.amount,
-                  customer: order.customer?.email,
-                  itemCount: order.lineItems.edges.length
-                })
+                }
+              }
+              userErrors {
+                field
+                message
               }
             }
+          }
+        `
+
+        const completeResponse = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': store.accessToken,
+          },
+          body: JSON.stringify({
+            query: completeMutation,
+            variables: { id: draftOrder.id }
+          })
+        })
+
+        if (completeResponse.ok) {
+          const completeData = await completeResponse.json()
+          console.log(`Complete response for order ${i + 1}:`, JSON.stringify(completeData, null, 2))
+          
+          const order = completeData.data?.draftOrderComplete?.draftOrder?.order
+          const completeErrors = completeData.data?.draftOrderComplete?.userErrors
+          
+          if (completeErrors && completeErrors.length > 0) {
+            console.error('Complete user errors:', completeErrors)
+            continue
+          }
+          
+          if (order) {
+            // Extract ID from GraphQL ID
+            const orderId = order.id.replace('gid://shopify/Order/', '')
+            
+            createdOrders.push({
+              shopifyOrderId: orderId,
+              orderName: order.name,
+              totalPrice: order.totalPriceSet.shopMoney.amount,
+              customer: order.customer?.email,
+              createdAt: order.createdAt
+            })
+
+            console.log(`Successfully created order: ${order.name}`)
           }
         }
         
         // Delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, 1000))
       } catch (error) {
         console.error(`Failed to create order ${i + 1}:`, error)
       }
@@ -240,10 +248,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       message: `Created ${createdOrders.length} orders`,
-      orders: createdOrders
+      orders: createdOrders,
+      debug: {
+        customersFound: customers.length,
+        variantsFound: variants.length
+      }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Order creation failed:', error)
-    return NextResponse.json({ error: 'Failed to create orders' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create orders', details: error.message }, { status: 500 })
   }
 }

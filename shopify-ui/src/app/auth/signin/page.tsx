@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Eye, EyeOff, ArrowRight, Mail, Lock, UserPlus } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Mail, Lock } from "lucide-react"
 
 export default function SignIn() {
   const [email, setEmail] = useState("")
@@ -17,14 +17,6 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
   const [magicLinkSent, setMagicLinkSent] = useState(false)
-  const [registerEmail, setRegisterEmail] = useState("")
-  const [registerPassword, setRegisterPassword] = useState("")
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("")
-  const [registerName, setRegisterName] = useState("")
-  const [registerLoading, setRegisterLoading] = useState(false)
-  const [registerFeedback, setRegisterFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
-  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
-  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false)
   const router = useRouter()
 
   async function handleCredentialsSignIn(e: React.FormEvent) {
@@ -62,61 +54,6 @@ export default function SignIn() {
       setMessage("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setRegisterLoading(true)
-    setRegisterFeedback(null)
-
-    if (registerPassword !== registerConfirmPassword) {
-      setRegisterFeedback({ type: "error", message: "Passwords do not match." })
-      setRegisterLoading(false)
-      return
-    }
-
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: registerEmail,
-          password: registerPassword,
-          name: registerName || undefined,
-        }),
-      })
-
-      const json = (await res.json()) as { error?: string }
-
-      if (!res.ok) {
-        setRegisterFeedback({ type: "error", message: json.error ?? "Failed to register. Please try again." })
-        setRegisterLoading(false)
-        return
-      }
-
-      setRegisterFeedback({ type: "success", message: "Account created! Signing you in…" })
-
-      const signInResult = await signIn("credentials", {
-        email: registerEmail,
-        password: registerPassword,
-        redirect: false,
-        callbackUrl: "/dashboard",
-      })
-
-      if (signInResult?.error) {
-        setRegisterFeedback({
-          type: "error",
-          message: "Account created, but automatic sign-in failed. Please sign in manually.",
-        })
-      } else if (signInResult?.ok) {
-        router.push("/dashboard")
-      }
-    } catch (error) {
-      console.error("Registration error", error)
-      setRegisterFeedback({ type: "error", message: "Something went wrong. Please try again." })
-    } finally {
-      setRegisterLoading(false)
     }
   }
 
@@ -158,15 +95,12 @@ export default function SignIn() {
 
           <div className="glass rounded-2xl p-6">
             <Tabs defaultValue="credentials" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-white/5 mb-6">
+              <TabsList className="grid w-full grid-cols-2 bg-white/5 mb-6">
                 <TabsTrigger value="credentials" className="flex items-center gap-2">
                   <Lock className="h-4 w-4" /> Password
                 </TabsTrigger>
                 <TabsTrigger value="magic-link" className="flex items-center gap-2">
                   <Mail className="h-4 w-4" /> Magic Link
-                </TabsTrigger>
-                <TabsTrigger value="register" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" /> Register
                 </TabsTrigger>
               </TabsList>
 
@@ -271,104 +205,6 @@ export default function SignIn() {
                 </form>
               </TabsContent>
 
-              <TabsContent value="register">
-                <form onSubmit={handleRegister} className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="register-name" className="text-gray-300 text-sm">Name</Label>
-                    <Input
-                      id="register-name"
-                      type="text"
-                      value={registerName}
-                      onChange={(event) => setRegisterName(event.target.value)}
-                      placeholder="Jane Doe"
-                      className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email" className="text-gray-300 text-sm">Email</Label>
-                    <Input
-                      id="register-email"
-                      type="email"
-                      value={registerEmail}
-                      onChange={(event) => setRegisterEmail(event.target.value)}
-                      placeholder="you@example.com"
-                      className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password" className="text-gray-300 text-sm">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="register-password"
-                        type={showRegisterPassword ? "text" : "password"}
-                        value={registerPassword}
-                        onChange={(event) => setRegisterPassword(event.target.value)}
-                        placeholder="••••••••"
-                        className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400 pr-11"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowRegisterPassword((state) => !state)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                        aria-label={showRegisterPassword ? "Hide password" : "Show password"}
-                      >
-                        {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password-confirm" className="text-gray-300 text-sm">Confirm Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="register-password-confirm"
-                        type={showRegisterConfirm ? "text" : "password"}
-                        value={registerConfirmPassword}
-                        onChange={(event) => setRegisterConfirmPassword(event.target.value)}
-                        placeholder="••••••••"
-                        className="h-11 bg-white/5 border-white/10 text-white placeholder:text-gray-400 pr-11"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowRegisterConfirm((state) => !state)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                        aria-label={showRegisterConfirm ? "Hide password" : "Show password"}
-                      >
-                        {showRegisterConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {registerFeedback && (
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-sm ${
-                        registerFeedback.type === "success"
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-                          : "bg-red-500/10 border-red-500/20 text-red-300"
-                      }`}
-                    >
-                      {registerFeedback.message}
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    disabled={registerLoading}
-                    className="w-full h-11 bg-white text-black hover:bg-gray-100 font-semibold lift"
-                  >
-                    {registerLoading ? "Creating account…" : (
-                      <span className="inline-flex items-center gap-2">
-                        Register <ArrowRight className="h-4 w-4" />
-                      </span>
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
             </Tabs>
           </div>
 

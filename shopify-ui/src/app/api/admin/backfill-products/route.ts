@@ -5,13 +5,26 @@ import { getPrisma } from '@/lib/db'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const { shop } = await req.json() as { shop: string }
+  const { shop, force = false } = await req.json() as { shop: string; force?: boolean }
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
   const prisma = getPrisma()
   const store = await prisma.store.findFirst({ where: { shopDomain: shop } })
   if (!store) return NextResponse.json({ error: 'store not installed' }, { status: 404 })
   const tenantId = (await prisma.store.findFirst({ where: { shopDomain: shop }, select: { tenantId: true } }))!.tenantId
+
+  // Check if table is empty, skip if already has data (unless force=true)
+  if (!force) {
+    const existingCount = await prisma.product.count({ where: { tenantId } })
+    if (existingCount > 0) {
+      return NextResponse.json({ 
+        ok: true, 
+        upserts: 0, 
+        skipped: true, 
+        message: `Found ${existingCount} existing products. Use force:true to override.` 
+      })
+    }
+  }
 
   const headers = { 
     'X-Shopify-Access-Token': store.accessToken as string,
@@ -30,22 +43,12 @@ export async function POST(req: NextRequest) {
           edges {
             node {
               id
+              legacyResourceId
               title
               handle
               status
               createdAt
               updatedAt
-              variants(first: 100) {
-                edges {
-                  node {
-                    id
-                    title
-                    price
-                    sku
-                    inventoryQuantity
-                  }
-                }
-              }
             }
             cursor
           }
@@ -69,16 +72,20 @@ export async function POST(req: NextRequest) {
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`GraphQL error ${response.status}:`, errorText)
       return NextResponse.json({ 
         error: 'GraphQL API error', 
         status: response.status, 
-        text: await response.text() 
+        text: errorText 
       }, { status: 502 })
     }
 
     const result = await response.json()
+    console.log(`Fetched ${result.data?.products?.edges?.length || 0} products, hasNextPage: ${result.data?.products?.pageInfo?.hasNextPage}`)
     
     if (result.errors) {
+      console.error('GraphQL errors:', result.errors)
       return NextResponse.json({ 
         error: 'GraphQL query errors', 
         errors: result.errors 
@@ -88,25 +95,34 @@ export async function POST(req: NextRequest) {
     const products = result.data?.products?.edges ?? []
 
     for (const edge of products) {
-      const product = edge.node
-      // Extract numeric ID from GraphQL global ID (gid://shopify/Product/123 -> 123)
-      const numericId = product.id.split('/').pop()
-      
-      await prisma.product.upsert({
-        where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(numericId) } },
-        update: { 
-          title: product.title,
-          updatedAt: new Date(product.updatedAt)
-        },
-        create: { 
-          tenantId, 
-          shopifyProductId: BigInt(numericId), 
-          title: product.title,
-          createdAt: new Date(product.createdAt),
-          updatedAt: new Date(product.updatedAt)
-        }
-      })
-      upserts++
+      try {
+        const product = edge.node
+        // Extract numeric ID from GraphQL global ID (gid://shopify/Product/123 -> 123)
+        const numericId = product.legacyResourceId || product.id.split('/').pop()
+        
+        console.log(`Upserting product ${numericId} for tenant ${tenantId}`)
+        await prisma.product.upsert({
+          where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(numericId) } },
+          update: { 
+            title: product.title,
+            handle: product.handle,
+            status: product.status,
+            updatedAt: new Date(product.updatedAt)
+          },
+          create: { 
+            tenantId, 
+            shopifyProductId: BigInt(numericId), 
+            title: product.title,
+            handle: product.handle,
+            status: product.status,
+            createdAt: new Date(product.createdAt),
+            updatedAt: new Date(product.updatedAt)
+          }
+        })
+        upserts++
+      } catch (error) {
+        console.error('Error upserting product:', error)
+      }
     }
 
     // Handle GraphQL pagination
