@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
     productCount,
     tenantInfo
   ] = await Promise.all([
-    prisma.checkout.count({ where: { tenantId } }).catch(e => ({ error: e.message })),
-    prisma.cart.count({ where: { tenantId } }).catch(e => ({ error: e.message })),
-    prisma.product.count({ where: { tenantId } }).catch(e => ({ error: e.message })),
-    prisma.tenant.findUnique({ where: { id: tenantId } }).catch(e => ({ error: e.message }))
+    prisma.checkout.count({ where: { tenantId } }).catch((e: Error) => ({ error: e.message })),
+    prisma.cart.count({ where: { tenantId } }).catch((e: Error) => ({ error: e.message })),
+    prisma.product.count({ where: { tenantId } }).catch((e: Error) => ({ error: e.message })),
+    prisma.tenant.findUnique({ where: { id: tenantId } }).catch((e: Error) => ({ error: e.message }))
   ])
 
   // Get sample data

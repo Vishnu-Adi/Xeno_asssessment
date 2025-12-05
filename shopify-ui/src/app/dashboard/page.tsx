@@ -234,12 +234,12 @@ function DashboardInner() {
               </div>
               <div className="flex items-end gap-2 h-20">
                 <div className="flex-1">
-                  <div className="h-16 bg-emerald-600/30 border border-emerald-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown.new.pct ?? 0)) * 0.6}px` }}></div>
-                  <div className="text-xs text-gray-400 mt-1">New ({nvr.data?.breakdown.new.count ?? 0})</div>
+                  <div className="h-16 bg-emerald-600/30 border border-emerald-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown?.new?.pct ?? 0)) * 0.6}px` }}></div>
+                  <div className="text-xs text-gray-400 mt-1">New ({nvr.data?.breakdown?.new?.count ?? 0})</div>
                 </div>
                 <div className="flex-1">
-                  <div className="h-16 bg-blue-600/30 border border-blue-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown.returning.pct ?? 0)) * 0.6}px` }}></div>
-                  <div className="text-xs text-gray-400 mt-1">Returning ({nvr.data?.breakdown.returning.count ?? 0})</div>
+                  <div className="h-16 bg-blue-600/30 border border-blue-500/30 rounded" style={{ height: `${Math.min(100, (nvr.data?.breakdown?.returning?.pct ?? 0)) * 0.6}px` }}></div>
+                  <div className="text-xs text-gray-400 mt-1">Returning ({nvr.data?.breakdown?.returning?.count ?? 0})</div>
                 </div>
               </div>
             </div>

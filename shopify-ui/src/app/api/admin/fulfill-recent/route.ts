@@ -40,13 +40,13 @@ export async function POST(req: NextRequest){
     const endISO = new Date().toISOString().slice(0,10)
     const q = `created_at:>=${startISO} created_at:<=${endISO}`
 
-    const data = await adminFetch(shop, ORDERS_Q, { query: q, first: 100 })
-    const orders: any[] = (data.orders.edges||[]).map((e:any)=>e.node).filter((o:any)=>o.displayFulfillmentStatus !== 'FULFILLED')
+    const data = await adminFetch<{ orders: { edges: { node: { id: string; createdAt: string; displayFulfillmentStatus: string } }[] } }>(shop, ORDERS_Q, { query: q, first: 100 })
+    const orders = (data.orders.edges||[]).map((e)=>e.node).filter((o)=>o.displayFulfillmentStatus !== 'FULFILLED')
     const toFulfill = orders.filter(()=>Math.random()*100 < percent)
 
     let updated = 0
     for(const o of toFulfill){
-      const foData = await adminFetch(shop, ORDER_FO_Q, { id: o.id })
+      const foData = await adminFetch<{ order?: { fulfillmentOrders?: { nodes: { id: string; lineItems?: { nodes: { id: string; remainingQuantity: number }[] } }[] } } }>(shop, ORDER_FO_Q, { id: o.id })
       const fos = foData.order?.fulfillmentOrders?.nodes || []
       if(!fos.length){ await delay(400); continue }
 
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest){
       }))
 
       const fulfillment = { lineItemsByFulfillmentOrder, notifyCustomer: false }
-      const res = await adminFetch(shop, FULFILL_MUT, { fulfillment, message: "Demo auto-fulfillment" })
+      const res = await adminFetch<{ fulfillmentCreateV2?: { userErrors?: { field: string; message: string }[] } }>(shop, FULFILL_MUT, { fulfillment, message: "Demo auto-fulfillment" })
       const errs = res.fulfillmentCreateV2?.userErrors
       if(!errs?.length){ updated++ }
       await delay(650)

@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
   const payload = JSON.parse(rawBody);
   const tenantId = await resolveTenantIdFromShopDomain(shop);
 
-
+  // Deduplicate webhook events
   const inserted = await prisma.$executeRawUnsafe(
-    'INSERT IGNORE INTO `WebhookEvent` (`tenantId`, `eventId`, `receivedAt`) VALUES (?, ?, NOW(6))',
-    tenantId, eventId
+    'INSERT IGNORE INTO `WebhookEvent` (`tenantId`, `eventId`, `eventType`, `receivedAt`) VALUES (?, ?, ?, NOW(6))',
+    tenantId, eventId, 'orders/create'
   );
   if (inserted === 0) return NextResponse.json({ ok: true, deduped: true });
 
@@ -39,5 +39,3 @@ function timingSafeEqualBase64(a: string, b: string) {
   if (ab.length !== bb.length) return false;
   return crypto.timingSafeEqual(ab, bb);
 }
-
-

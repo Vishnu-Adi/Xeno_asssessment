@@ -55,15 +55,18 @@ export async function POST(req: NextRequest){
     if(!shop) return NextResponse.json({error:'Missing shop'}, {status:400})
 
     // 1) Load base data
+    type ProductsData = { products: { edges: { node: { id: string; title: string; variants: { edges: { node: { id: string } }[] } } }[] } };
+    type CustomerNode = { id: string; firstName: string; lastName: string; email: string };
+    type CustomersData = { customers: { edges: { node: CustomerNode }[] } };
     const [pData, cData] = await Promise.all([
-      adminFetch(shop, PRODUCTS_Q, { first: 30 }),
-      adminFetch(shop, CUSTOMERS_Q, { first: 150 })
+      adminFetch<ProductsData>(shop, PRODUCTS_Q, { first: 30 }),
+      adminFetch<CustomersData>(shop, CUSTOMERS_Q, { first: 150 })
     ])
-    const products = (pData.products.edges||[]).map((e:any)=>({
+    const products = (pData.products.edges||[]).map((e)=>({
       id: e.node.id,
-      variants: (e.node.variants.edges||[]).map((v:any)=>v.node.id)
-    })).filter((p:any)=>p.variants.length)
-    let customers = (cData.customers.edges||[]).map((e:any)=>e.node)
+      variants: (e.node.variants.edges||[]).map((v)=>v.node.id)
+    })).filter((p)=>p.variants.length)
+    let customers: CustomerNode[] = (cData.customers.edges||[]).map((e)=>e.node)
 
     // 2) Top-up customers if needed
     let createdCustomers = 0
@@ -71,9 +74,10 @@ export async function POST(req: NextRequest){
       const {firstName,lastName} = genName()
       const suffix = Date.now().toString().slice(-7) + randInt(10,99)
       const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${suffix}@example.com`
-      const res = await adminFetch(shop, CUSTOMER_CREATE, { input: { firstName, lastName, email, tags:["seed","demo"] } })
+      type CustomerCreateRes = { customerCreate: { customer?: { id: string; email: string; firstName: string; lastName: string }; userErrors?: { field: string; message: string }[] } };
+      const res = await adminFetch<CustomerCreateRes>(shop, CUSTOMER_CREATE, { input: { firstName, lastName, email, tags:["seed","demo"] } })
       const errs = res.customerCreate.userErrors
-      if(!errs?.length){
+      if(!errs?.length && res.customerCreate.customer){
         customers.push(res.customerCreate.customer)
         createdCustomers++
       }
@@ -93,11 +97,13 @@ export async function POST(req: NextRequest){
         const variantId = p.variants[randInt(0, p.variants.length-1)]
         lineItems.push({ variantId, quantity: randInt(1,2) })
       }
-      const draft = await adminFetch(shop, DRAFT_CREATE, { input: { customerId: cust.id, lineItems, tags:["seed","demo"], note:"Assessment seed order" } })
+      type DraftCreateRes = { draftOrderCreate?: { draftOrder?: { id: string }; userErrors?: { field: string; message: string }[] } };
+      type DraftCompleteRes = { draftOrderComplete?: { draftOrder?: { id: string; order?: { id: string } }; userErrors?: { field: string; message: string }[] } };
+      const draft = await adminFetch<DraftCreateRes>(shop, DRAFT_CREATE, { input: { customerId: cust.id, lineItems, tags:["seed","demo"], note:"Assessment seed order" } })
       const draftId = draft.draftOrderCreate?.draftOrder?.id
       if(!draftId){ await delay(800); continue }
       await delay(800)
-      const comp = await adminFetch(shop, DRAFT_COMPLETE, { id: draftId, paymentPending: false })
+      const comp = await adminFetch<DraftCompleteRes>(shop, DRAFT_COMPLETE, { id: draftId, paymentPending: false })
       if(comp.draftOrderComplete?.draftOrder?.order?.id){ createdOrders++ }
       await delay(900)
     }

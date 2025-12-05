@@ -5,6 +5,11 @@ import * as OrdersRepo from '@/repos/orders'
 
 export const runtime = 'nodejs'
 
+function envTokenForShop(shop: string): string | undefined {
+  const base = shop.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+  return process.env[`SHOPIFY_TOKEN_${base}`] || process.env.SHOPIFY_ACCESS_TOKEN
+}
+
 /**
  * Backfill orders via Admin GraphQL.
  * Body: { shop: string; accessToken?: string; first?: number }
@@ -14,10 +19,14 @@ export async function POST(req: NextRequest) {
   const { shop, accessToken: bodyToken, first = 50 } = (await req.json()) as { shop?: string; accessToken?: string; first?: number }
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
+  // Try to get access token: body > DB > env
   let accessToken = bodyToken as string | undefined
   if (!accessToken) {
     const store = await prisma.store.findFirst({ where: { shopDomain: shop } })
     accessToken = store?.accessToken
+  }
+  if (!accessToken) {
+    accessToken = envTokenForShop(shop)
   }
   if (!accessToken) return NextResponse.json({ error: 'store not installed and no accessToken provided' }, { status: 404 })
 

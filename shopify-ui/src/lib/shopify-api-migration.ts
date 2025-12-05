@@ -1,7 +1,4 @@
-// src/lib/shopify-api-migration.ts
-// Shopify API Migration Helper - Ensures compliance with 2024-04 API changes
-// Public Apps: Must migrate by Feb 1st, 2025
-// Custom Apps: Must migrate by April 1st, 2025
+
 
 export interface ShopifyApiConfig {
   shop: string

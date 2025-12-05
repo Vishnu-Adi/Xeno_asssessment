@@ -22,7 +22,7 @@ export async function listProducts(scope: TenantScope, params: { limit?: number;
 
 export async function upsertFromShopify(
   scope: TenantScope,
-  payload: { id: string; title?: string; created_at?: string },
+  payload: { id: string; title?: string; handle?: string; status?: string; created_at?: string },
   client?: PrismaClient | Prisma.TransactionClient
 ): Promise<Product> {
   const prisma = (client ?? getPrisma());
@@ -30,11 +30,15 @@ export async function upsertFromShopify(
     where: { tenantId_shopifyProductId: { tenantId: scope.tenantId, shopifyProductId: BigInt(payload.id) } },
     update: {
       title: payload.title ?? 'Untitled',
+      handle: payload.handle ?? null,
+      status: payload.status ?? null,
     },
     create: {
       tenantId: scope.tenantId,
       shopifyProductId: BigInt(payload.id),
       title: payload.title ?? 'Untitled',
+      handle: payload.handle ?? null,
+      status: payload.status ?? null,
       createdAt: payload.created_at ? new Date(payload.created_at) : undefined,
     },
   });

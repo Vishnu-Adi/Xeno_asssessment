@@ -14,11 +14,14 @@ A Next.js Shopify assessment app that connects to Shopify’s Admin GraphQL API 
 - NextAuth – Authentication via email magic link and credential login (with a Prisma adapter). In development mode, a demo user login (demo@example.com / demo123) is enabled for convenience.
 - Prisma ORM – Database toolkit for MySQL; manages models for stores, customers, orders, etc., and provides a type-safe client. The database (e.g., MySQL/PlanetScale) stores tenant info and optionally cached data.
 - MySQL Database – Stores multi-tenant data (Shopify store tokens, and any ingested entities like Orders, Customers, Products for local use).
+- Redis + BullMQ – Async job processing for webhooks, scheduled syncs, rate limiting, and caching.
+- Pino – Structured JSON logging for production observability.
 - Shopify Admin GraphQL API – Primary data source for analytics (orders, customers, products).
+- Shopify Bulk Operations API – For large-scale data sync (100k+ records).
 - Shopify Storefront GraphQL API – Used for certain operations like product catalog backfill without requiring Admin scope in some cases.
-- Shopify Webhooks – Integration to receive real-time updates (order creations, product updates, etc.) from Shopify to keep the app’s database in sync.
+- Shopify Webhooks – Integration to receive real-time updates (order creations, product updates, etc.) from Shopify to keep the app's database in sync.
 - Recharts – Charting library for visualizing trends (used for the Orders & Revenue line chart).
-- Node.js (Next.js API Routes) – Backend for the application’s serverless functions (GraphQL proxy, webhooks, admin tools) running within the Next.js app.
+- Node.js (Next.js API Routes) – Backend for the application's serverless functions (GraphQL proxy, webhooks, admin tools) running within the Next.js app.
 - Deployment: Vercel for hosting the app (Next.js serverless deployment) for the live demo.
 
 ---
@@ -58,6 +61,62 @@ NextAuth protects the dashboard behind login. Sign-in via email magic-link (if S
 ### Extensibility & Modern Architecture
 Built on the latest Next.js App Router with modular API routes in `src/app/api` and a UI leveraging React Server Components. Input validation, safe JSON utilities, and a clean repository structure make it straightforward to extend (e.g., add inventory analytics or funnel metrics).
 
+### Advanced Technical Features (Bonus)
+
+#### Async Webhook Processing with BullMQ
+All webhooks are processed asynchronously via Redis-backed job queues:
+- Webhooks respond in <100ms while processing happens in background
+- Automatic retry with exponential backoff for failed jobs
+- Job deduplication to prevent duplicate processing
+- Run workers with: `pnpm workers`
+
+#### Scheduled Data Sync
+Keep data in sync with scheduled jobs:
+- Full sync: `POST /api/sync/full?shop=...` with `{ "type": "full" }`
+- Incremental sync: Fetches only records updated since last sync
+- Schedule recurring syncs: `{ "schedule": "0 */6 * * *" }` (every 6 hours)
+- Sync history tracked in `SyncLog` table
+
+#### Cart Abandonment Analytics
+Track the complete conversion funnel:
+- `GET /api/analytics/cart-funnel?shop=...` – Conversion rates and abandonment metrics
+- `GET /api/analytics/abandoned-carts?shop=...` – List of abandoned carts for recovery
+- Segmentation by recency (recent, medium, stale)
+- Recovery potential calculations
+
+#### Rate Limiting
+Redis-based sliding window rate limiting:
+- Per-IP and per-tenant rate limits
+- Configurable limits per endpoint
+- Proper `Retry-After` headers on 429 responses
+
+#### Shopify Bulk Operations API
+For stores with large datasets:
+- `POST /api/sync/bulk?shop=...` – Start bulk operation
+- `GET /api/sync/bulk?shop=...` – Check status
+- Automatic JSONL parsing of results
+
+#### Real-Time Updates (SSE)
+Server-Sent Events for live dashboard updates:
+- `GET /api/events/stream?shop=...` – Subscribe to real-time events
+- Automatic reconnection with heartbeat
+
+#### Data Export
+Export data to CSV:
+- `GET /api/export/orders?shop=...&startDate=...&endDate=...`
+- `GET /api/export/customers?shop=...&includeSpend=true`
+- `GET /api/export/analytics?shop=...&startDate=...&endDate=...`
+
+#### Enhanced Security
+- OAuth state validation with Redis (CSRF protection)
+- Role-based tenant access (admin, editor, viewer)
+- Tenant invitation system via secure links
+- Audit logging for sensitive operations
+
+#### Production-Ready Health Checks
+- `GET /api/health` – Basic health check
+- `GET /api/health?detailed=true` – Full status with DB, Redis, queue stats
+
 ---
 
 ## Setup Instructions
@@ -71,10 +130,12 @@ pnpm install
 Create a `.env` with at least:
 
 - `DATABASE_URL` – MySQL connection string, e.g. `mysql://user:pass@localhost:3306/mydb`
+- `REDIS_URL` – Redis connection string, e.g. `redis://localhost:6379` (for queues, caching, rate limiting)
 - Shopify App Credentials – `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_SCOPES` (e.g. `read_products,read_orders,read_customers,read_all_orders`)
 - App URL – `SHOPIFY_APP_URL` (e.g., your ngrok URL locally or Vercel URL in prod)
 - Per‑store Admin tokens – either a shared `SHOPIFY_ACCESS_TOKEN` or per‑shop envs like `SHOPIFY_TOKEN_TENANT_A_DEMO_MYSHOPIFY_COM`
 - NextAuth – `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and optionally SMTP creds (`EMAIL_SERVER_HOST`, `EMAIL_SERVER_PORT`, `EMAIL_SERVER_USER`, `EMAIL_SERVER_PASSWORD`, `EMAIL_FROM`)
+- `DEMO_MODE=true` – Allows access without explicit tenant user records (for demo purposes)
 
 This repository includes an `env.ts` schema to validate required variables.
 
@@ -83,23 +144,95 @@ This repository includes an `env.ts` schema to validate required variables.
 pnpm db:migrate
 ```
 
-### 4) Start the Dev Server
+### 4) Start Redis (required for queues)
+```bash
+# Using Docker
+docker run -d --name redis -p 6379:6379 redis:alpine
+
+# Or install locally via brew/apt
+```
+
+### 5) Start the Dev Server
 ```bash
 pnpm dev
 ```
 
+### 6) Start Background Workers (optional, for async processing)
+```bash
+# In a separate terminal
+pnpm workers
+```
+
 Open: `http://localhost:3000/dashboard?shop=tenant-a-demo.myshopify.com` and sign in (demo credentials or email link).
 
-### 5) Seed Data (optional for empty dev stores)
+### 7) Seed Data (optional for empty dev stores)
 ```bash
 curl -X POST "http://localhost:3000/api/admin/seed-shopify?shop=tenant-a-demo.myshopify.com&customers=20&orders=20"
 ```
 
 ---
 
+## API Endpoints
+
+### Analytics
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/analytics/overview` | GET | KPIs: products, customers, orders, GMV, AOV |
+| `/api/analytics/orders-by-date` | GET | Orders and revenue time series |
+| `/api/analytics/top-customers` | GET | Top customers by spend |
+| `/api/analytics/new-vs-returning` | GET | New vs returning customer breakdown |
+| `/api/analytics/fulfillment-sla` | GET | Fulfillment status split and median SLA |
+| `/api/analytics/cart-funnel` | GET | Cart abandonment funnel metrics |
+| `/api/analytics/abandoned-carts` | GET | List of abandoned carts |
+
+### Data Sync
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sync/full` | POST | Trigger full or incremental sync |
+| `/api/sync/full` | GET | Get sync history |
+| `/api/sync/bulk` | POST | Start Shopify Bulk Operation |
+| `/api/sync/bulk` | GET | Check bulk operation status |
+| `/api/sync/bulk` | DELETE | Cancel bulk operation |
+
+### Export
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/export/orders` | GET | Export orders to CSV |
+| `/api/export/customers` | GET | Export customers to CSV |
+| `/api/export/analytics` | GET | Export daily analytics to CSV |
+
+### Tenant Management
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/tenant/users` | GET | List tenant users |
+| `/api/tenant/users` | POST | Grant user access |
+| `/api/tenant/users` | DELETE | Revoke user access |
+| `/api/tenant/invite` | POST | Create invitation link |
+| `/api/tenant/invite` | GET | Accept invitation |
+
+### System
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check (detailed=true for full status) |
+| `/api/queues/status` | GET | Queue statistics |
+| `/api/events/stream` | GET | SSE endpoint for real-time updates |
+
+### Webhooks
+All webhook endpoints at `/api/webhooks/{topic}` support:
+- `products/create`, `products/update`
+- `customers/create`, `customers/update`
+- `orders/create`, `orders/update`
+- `carts/create`, `carts/update`
+- `checkouts/create`, `checkouts/update`
+- `app/uninstalled`
+
+---
+
 ## Deployment
 
 Deployed on Vercel (recommended). Append `?shop=<shop-domain>` to the dashboard URL to select a tenant. Ensure all environment variables and store tokens are configured in the Vercel project settings.
+
+For production with workers, deploy the worker process separately (e.g., on Railway, Render, or a dedicated server) running `pnpm workers`.
 
 ---
 

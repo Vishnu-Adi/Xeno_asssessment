@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(await fetchShopifyProducts(shop))
     }
 
-    const items = products.map((product) => ({
+    type ProductRow = { shopifyProductId: bigint; title: string; updatedAt: Date; status: string | null };
+    const items = products.map((product: ProductRow) => ({
       id: product.shopifyProductId ? `gid://shopify/Product/${product.shopifyProductId.toString()}` : undefined,
       title: product.title,
       updatedAt: product.updatedAt.toISOString(),

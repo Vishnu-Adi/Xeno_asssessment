@@ -2,16 +2,32 @@
 // MIGRATED TO NEW GRAPHQL PRODUCT APIS (2024-04+) - Compliant with Feb 1st, 2025 deadline
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/db'
+import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
 export const runtime = 'nodejs'
 
+function envTokenForShop(shop: string): string | undefined {
+  const base = shop.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+  return process.env[`SHOPIFY_TOKEN_${base}`] || process.env.SHOPIFY_ACCESS_TOKEN
+}
+
 export async function POST(req: NextRequest) {
-  const { shop, force = false } = await req.json() as { shop: string; force?: boolean }
+  const { shop, accessToken: bodyToken, force = false } = await req.json() as { shop: string; accessToken?: string; force?: boolean }
   if (!shop) return NextResponse.json({ error: 'missing shop' }, { status: 400 })
 
   const prisma = getPrisma()
-  const store = await prisma.store.findFirst({ where: { shopDomain: shop } })
-  if (!store) return NextResponse.json({ error: 'store not installed' }, { status: 404 })
-  const tenantId = (await prisma.store.findFirst({ where: { shopDomain: shop }, select: { tenantId: true } }))!.tenantId
+  
+  // Try to get access token: body > DB > env
+  let accessToken = bodyToken
+  if (!accessToken) {
+    const store = await prisma.store.findFirst({ where: { shopDomain: shop } })
+    accessToken = store?.accessToken ?? undefined
+  }
+  if (!accessToken) {
+    accessToken = envTokenForShop(shop)
+  }
+  if (!accessToken) return NextResponse.json({ error: 'store not installed and no accessToken provided' }, { status: 404 })
+  
+  const tenantId = await resolveTenantIdFromShopDomain(shop)
 
   // Check if table is empty, skip if already has data (unless force=true)
   if (!force) {
@@ -27,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   const headers = { 
-    'X-Shopify-Access-Token': store.accessToken as string,
+    'X-Shopify-Access-Token': accessToken,
     'Content-Type': 'application/json'
   }
   

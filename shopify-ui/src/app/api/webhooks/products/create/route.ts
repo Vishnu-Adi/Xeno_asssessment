@@ -1,62 +1,40 @@
-// src/app/api/webhooks/products/create/route.ts
-// UPDATED FOR NEW GRAPHQL PRODUCT APIS - Compatible with both old and new webhook formats
-import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
-import { getEnv } from '@/lib/env'
-import { getPrisma } from '@/lib/db'
-import { resolveTenantIdFromShopDomain } from '@/lib/tenant'
-export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { getEnv } from '@/lib/env';
+import { getPrisma } from '@/lib/db';
+import { resolveTenantIdFromShopDomain } from '@/lib/tenant';
+import * as ProductsRepo from '@/repos/products';
 
 export async function POST(req: NextRequest) {
-  const { SHOPIFY_API_SECRET } = getEnv()
-  const prisma = getPrisma()
-  const raw = Buffer.from(await req.arrayBuffer())
-  const hmac = req.headers.get('x-shopify-hmac-sha256') || ''
-  const shop = req.headers.get('x-shopify-shop-domain') || ''
-  const eventId = req.headers.get('x-shopify-event-id') || ''
-  const digest = crypto.createHmac('sha256', SHOPIFY_API_SECRET).update(raw).digest('base64')
-  try { if (!crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(digest))) return new NextResponse('invalid hmac',{status:401}) } catch { return new NextResponse('invalid hmac',{status:401}) }
+  const env = getEnv();
+  const prisma = getPrisma();
 
-  const payload = JSON.parse(raw.toString('utf8'))
-  const tenantId = await resolveTenantIdFromShopDomain(shop)
+  const hmac = req.headers.get('x-shopify-hmac-sha256');
+  const shop = req.headers.get('x-shopify-shop-domain');
+  const eventId = req.headers.get('x-shopify-event-id');
+  if (!hmac || !shop || !eventId) return NextResponse.json({ error: 'Missing headers' }, { status: 400 });
 
-  await prisma.webhookEvent.create({ data: { tenantId, eventId, eventType: 'products/create' } }).catch(()=>null)
+  const rawBody = await req.text();
+  const digest = crypto.createHmac('sha256', env.SHOPIFY_API_SECRET).update(rawBody, 'utf8').digest('base64');
+  if (!timingSafeEqualBase64(hmac, digest)) return new NextResponse('Unauthorized', { status: 401 });
 
-  // Handle both old REST format (numeric ID) and new GraphQL format (global ID)
-  let productId: string
-  if (typeof payload.id === 'string' && payload.id.includes('gid://shopify/Product/')) {
-    // New GraphQL format: gid://shopify/Product/123 -> 123
-    productId = payload.id.split('/').pop()
-  } else {
-    // Old REST format: numeric ID
-    productId = String(payload.id)
-  }
+  const payload = JSON.parse(rawBody);
+  const tenantId = await resolveTenantIdFromShopDomain(shop);
 
-  // Enhanced product data handling for new API structure
-  const productData = {
-    title: payload.title,
-    updatedAt: new Date(),
-    // Handle additional fields that may be present in new API
-    ...(payload.handle && { handle: payload.handle }),
-    ...(payload.status && { status: payload.status }),
-    ...(payload.created_at && { createdAt: new Date(payload.created_at) })
-  }
+  const inserted = await prisma.$executeRawUnsafe(
+    'INSERT IGNORE INTO `WebhookEvent` (`tenantId`, `eventId`, `eventType`, `receivedAt`) VALUES (?, ?, ?, NOW(6))',
+    tenantId, eventId, 'products/create'
+  );
+  if (inserted === 0) return NextResponse.json({ ok: true, deduped: true });
 
-  await prisma.product.upsert({
-    where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: BigInt(productId) } },
-    update: productData,
-    create: { 
-      tenantId, 
-      shopifyProductId: BigInt(productId), 
-      ...productData,
-      createdAt: productData.createdAt || new Date()
-    }
-  })
+  await ProductsRepo.upsertFromShopify({ tenantId }, payload);
 
-  return NextResponse.json({ 
-    ok: true, 
-    productId, 
-    apiCompatible: true,
-    format: payload.id.toString().includes('gid://') ? 'graphql' : 'rest'
-  })
+  return NextResponse.json({ ok: true });
+}
+
+function timingSafeEqualBase64(a: string, b: string) {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
 }
